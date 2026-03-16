@@ -10,6 +10,8 @@ An experimental 3D vector-style engine built with C and SDL3, compiled to WebAss
 - **Hardware Accelerated Lines**: Uses SDL3's new rendering API for high-performance vector graphics.
 - **WebAssembly Ready**: Fully compatible with modern browsers using Emscripten.
 - **Retro Aesthetic**: Neon-on-black color palette inspired by 1980s vector monitors.
+- **Gameplay Systems**: Scoring, player lives, Superzapper, and Game Over states.
+- **Custom Vector HUD**: Retro-style digit rendering for score and status.
 
 ## How to Build
 To compile for the web (GitHub Pages):
@@ -24,6 +26,9 @@ To compile natively (Linux):
 
 ## Controls
 - **Left / Right Arrow Keys**: Rotate the Blaster around the tunnel rim.
+- **Space**: Fire shots down the tunnel.
+- **Z**: Activate the Superzapper (once per game - clears all enemies).
+- **R**: Reset the game after a Game Over.
 
 ## License
 MIT License - feel free to experiment with the code!

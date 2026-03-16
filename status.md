@@ -16,10 +16,19 @@ The project is currently a functional 3D vector-style engine prototype built wit
 - **Controls**: 
   - `Left / Right Arrow`: Rotate the Blaster around the tunnel rim.
   - `Space`: Fire red shots down the tunnel segments.
+  - `Z`: Trigger Superzapper (one-time screen clear).
+  - `R`: Reset game.
 - **Enemy System**: 
   - Enemies are rendered as green "X" shapes.
   - They spawn at the far end of the tunnel and move toward the player.
   - Basic collision detection: Shots destroy enemies if they are in the same segment and close in `z` distance.
+- **Scoring & Lives**:
+  - Player starts with 3 lives. Losing a life triggers a "Game Over" when reaching zero.
+  - Destroying enemies adds 100 points to the score.
+
+### 3. User Interface (HUD)
+- **Vector Digit Rendering**: A custom line-based digit renderer draws the score and lives in a classic vector style.
+- **Indicators**: Visual feedback for remaining lives and Superzapper availability.
 
 ### 3. Build & Platform Support
 - **Native**: Compiles with GCC on Linux (`-lSDL3 -lm`).
