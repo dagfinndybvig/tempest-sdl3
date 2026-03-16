@@ -54,6 +54,12 @@ typedef struct {
     bool active;
 } Enemy;
 
+typedef enum {
+    TUNNEL_CIRCLE = 0,
+    TUNNEL_SQUARE = 1,
+    TUNNEL_FLAT = 2
+} TunnelShape;
+
 typedef struct {
     SDL_Window* window;
     SDL_Renderer* renderer;
@@ -69,6 +75,7 @@ typedef struct {
     bool superzapperUsed;
     int flashTimer;
     int score;
+    TunnelShape tunnelShape;
 } AppContext;
 
 void AudioCallback(void* userdata, SDL_AudioStream* stream, int len, int freq) {
@@ -154,22 +161,53 @@ void Project(Point3D p, int width, int height, float* sx, float* sy) {
     *sy = (height / 2.0f) + (p.y * scale);
 }
 
+/* Compute XY coordinates on the tunnel rim given a param in [0,1).
+   Supports circle, square, and flat shapes. */
+static void TunnelXY(float param, TunnelShape shape, float* outx, float* outy) {
+    if (shape == TUNNEL_CIRCLE) {
+        float angle = param * 2.0f * M_PI;
+        *outx = cosf(angle) * TUNNEL_RADIUS;
+        *outy = sinf(angle) * TUNNEL_RADIUS;
+    } else if (shape == TUNNEL_SQUARE) {
+        float scaled = param * 4.0f;
+        float base = floorf(scaled);
+        int side = ((int)base) % 4;
+        float frac = scaled - base;
+        float r = TUNNEL_RADIUS;
+        switch (side) {
+            case 0: *outx = r; *outy = -r + 2.0f * r * frac; break;
+            case 1: *outx = r - 2.0f * r * frac; *outy = r; break;
+            case 2: *outx = -r; *outy = r - 2.0f * r * frac; break;
+            default: *outx = -r + 2.0f * r * frac; *outy = -r; break;
+        }
+    } else { /* TUNNEL_FLAT */
+        float angle = param * 2.0f * M_PI;
+        *outx = cosf(angle) * TUNNEL_RADIUS;
+        *outy = 0.0f;
+    }
+}
+
 void DrawBlaster(AppContext* ctx, int w, int h) {
-    float a1 = (float)ctx->playerSegment * (2.0f * M_PI / NUM_SIDES);
-    float a2 = (float)(ctx->playerSegment + 1) * (2.0f * M_PI / NUM_SIDES);
     float depth = 0.2f;  // How far the "claws" go into the tunnel
-    
+
     // The blaster is a U-shape defined by 4 points
     Point3D p[4];
-    
+
+    float param1 = (float)ctx->playerSegment / (float)NUM_SIDES;
+    float param2 = (float)(ctx->playerSegment + 1) / (float)NUM_SIDES;
+    float tx1, ty1, tx2, ty2;
+    TunnelXY(param1, ctx->tunnelShape, &tx1, &ty1);
+    TunnelXY(param2, ctx->tunnelShape, &tx2, &ty2);
+
+    float scaleInner = (TUNNEL_RADIUS - depth) / TUNNEL_RADIUS;
     // Point 1: Left claw tip (deeper in)
-    p[0] = (Point3D){cosf(a1) * (TUNNEL_RADIUS - depth), sinf(a1) * (TUNNEL_RADIUS - depth), 2.2f};
+    p[0] = (Point3D){tx1 * scaleInner, ty1 * scaleInner, 2.2f};
     // Point 2: Left base (on rim)
-    p[1] = (Point3D){cosf(a1) * TUNNEL_RADIUS, sinf(a1) * TUNNEL_RADIUS, 2.0f};
+    p[1] = (Point3D){tx1, ty1, 2.0f};
     // Point 3: Right base (on rim)
-    p[2] = (Point3D){cosf(a2) * TUNNEL_RADIUS, sinf(a2) * TUNNEL_RADIUS, 2.0f};
+    p[2] = (Point3D){tx2, ty2, 2.0f};
     // Point 4: Right claw tip (deeper in)
-    p[3] = (Point3D){cosf(a2) * (TUNNEL_RADIUS - depth), sinf(a2) * (TUNNEL_RADIUS - depth), 2.2f};
+    p[3] = (Point3D){tx2 * scaleInner, ty2 * scaleInner, 2.2f};
 
     float sx[4], sy[4];
     for(int i=0; i<4; i++) Project(p[i], w, h, &sx[i], &sy[i]);
@@ -200,6 +238,7 @@ void ResetGame(AppContext* ctx) {
     ctx->superzapperUsed = false;
     ctx->flashTimer = 0;
     ctx->playerSegment = 0;
+    ctx->tunnelShape = TUNNEL_CIRCLE;
     for(int i=0; i<MAX_SHOTS; i++) ctx->shots[i].active = false;
     for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
 }
@@ -279,6 +318,9 @@ void MainLoop(void* arg) {
             }
             if (event.key.scancode == SDL_SCANCODE_LEFT) ctx->playerSegment = (ctx->playerSegment - 1 + NUM_SIDES) % NUM_SIDES;
             if (event.key.scancode == SDL_SCANCODE_RIGHT) ctx->playerSegment = (ctx->playerSegment + 1) % NUM_SIDES;
+            if (event.key.scancode == SDL_SCANCODE_1) ctx->tunnelShape = TUNNEL_CIRCLE;
+            if (event.key.scancode == SDL_SCANCODE_2) ctx->tunnelShape = TUNNEL_SQUARE;
+            if (event.key.scancode == SDL_SCANCODE_3) ctx->tunnelShape = TUNNEL_FLAT;
             if (event.key.scancode == SDL_SCANCODE_SPACE) {
                 for(int i=0; i<MAX_SHOTS; i++) {
                     if(!ctx->shots[i].active) {
@@ -371,12 +413,16 @@ void MainLoop(void* arg) {
         Uint8 color_val = (Uint8)(255 - (r * (255 / NUM_RINGS)));
         
         for (int s = 0; s < NUM_SIDES; s++) {
-            float a1 = (float)s * (2.0f * M_PI / NUM_SIDES);
-            float a2 = (float)(s + 1) * (2.0f * M_PI / NUM_SIDES);
-            
-            Point3D p1 = {cosf(a1) * TUNNEL_RADIUS, sinf(a1) * TUNNEL_RADIUS, z};
-            Point3D p2 = {cosf(a2) * TUNNEL_RADIUS, sinf(a2) * TUNNEL_RADIUS, z};
-            Point3D p3 = {cosf(a1) * TUNNEL_RADIUS, sinf(a1) * TUNNEL_RADIUS, z + RING_DISTANCE};
+            float param1 = (float)s / (float)NUM_SIDES;
+            float param2 = (float)(s + 1) / (float)NUM_SIDES;
+
+            float tx1, ty1, tx2, ty2;
+            TunnelXY(param1, ctx->tunnelShape, &tx1, &ty1);
+            TunnelXY(param2, ctx->tunnelShape, &tx2, &ty2);
+
+            Point3D p1 = {tx1, ty1, z};
+            Point3D p2 = {tx2, ty2, z};
+            Point3D p3 = {tx1, ty1, z + RING_DISTANCE};
 
             float x1, y1, x2, y2, x3, y3;
             Project(p1, w, h, &x1, &y1);
@@ -394,16 +440,19 @@ void MainLoop(void* arg) {
     // Draw Enemies
     for (int i = 0; i < MAX_ENEMIES; i++) {
         if (ctx->enemies[i].active) {
-            float a1 = (float)ctx->enemies[i].segment * (2.0f * M_PI / NUM_SIDES);
-            float a2 = (float)(ctx->enemies[i].segment + 1) * (2.0f * M_PI / NUM_SIDES);
+            float param1 = (float)ctx->enemies[i].segment / (float)NUM_SIDES;
+            float param2 = (float)(ctx->enemies[i].segment + 1) / (float)NUM_SIDES;
             float z = ctx->enemies[i].z;
             
             // Draw an "X" in the segment
             Point3D p[4];
-            p[0] = (Point3D){cosf(a1) * TUNNEL_RADIUS, sinf(a1) * TUNNEL_RADIUS, z};
-            p[1] = (Point3D){cosf(a2) * TUNNEL_RADIUS, sinf(a2) * TUNNEL_RADIUS, z + 0.5f};
-            p[2] = (Point3D){cosf(a2) * TUNNEL_RADIUS, sinf(a2) * TUNNEL_RADIUS, z};
-            p[3] = (Point3D){cosf(a1) * TUNNEL_RADIUS, sinf(a1) * TUNNEL_RADIUS, z + 0.5f};
+            float tx1, ty1, tx2, ty2;
+            TunnelXY(param1, ctx->tunnelShape, &tx1, &ty1);
+            TunnelXY(param2, ctx->tunnelShape, &tx2, &ty2);
+            p[0] = (Point3D){tx1, ty1, z};
+            p[1] = (Point3D){tx2, ty2, z + 0.5f};
+            p[2] = (Point3D){tx2, ty2, z};
+            p[3] = (Point3D){tx1, ty1, z + 0.5f};
 
             float sx[4], sy[4];
             for(int k=0; k<4; k++) Project(p[k], w, h, &sx[k], &sy[k]);
@@ -418,15 +467,19 @@ void MainLoop(void* arg) {
     SDL_SetRenderDrawBlendMode(ctx->renderer, SDL_BLENDMODE_ADD);
     for (int i = 0; i < MAX_SHOTS; i++) {
         if (ctx->shots[i].active) {
-            float a1 = (float)ctx->shots[i].segment * (2.0f * M_PI / NUM_SIDES);
-            float a2 = (float)(ctx->shots[i].segment + 1) * (2.0f * M_PI / NUM_SIDES);
+            float param1 = (float)ctx->shots[i].segment / (float)NUM_SIDES;
+            float param2 = (float)(ctx->shots[i].segment + 1) / (float)NUM_SIDES;
             float z_start = ctx->shots[i].z;
             float z_end = z_start + 0.5f;
 
-            Point3D p1 = {cosf(a1) * TUNNEL_RADIUS, sinf(a1) * TUNNEL_RADIUS, z_start};
-            Point3D p2 = {cosf(a2) * TUNNEL_RADIUS, sinf(a2) * TUNNEL_RADIUS, z_start};
-            Point3D p3 = {cosf(a1) * TUNNEL_RADIUS, sinf(a1) * TUNNEL_RADIUS, z_end};
-            Point3D p4 = {cosf(a2) * TUNNEL_RADIUS, sinf(a2) * TUNNEL_RADIUS, z_end};
+            float tx1, ty1, tx2, ty2;
+            TunnelXY(param1, ctx->tunnelShape, &tx1, &ty1);
+            TunnelXY(param2, ctx->tunnelShape, &tx2, &ty2);
+
+            Point3D p1 = {tx1, ty1, z_start};
+            Point3D p2 = {tx2, ty2, z_start};
+            Point3D p3 = {tx1, ty1, z_end};
+            Point3D p4 = {tx2, ty2, z_end};
 
             float x1, y1, x2, y2, x3, y3, x4, y4;
             Project(p1, w, h, &x1, &y1);
