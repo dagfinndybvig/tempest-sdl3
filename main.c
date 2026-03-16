@@ -78,6 +78,12 @@ typedef struct {
     TunnelShape tunnelShape;
 } AppContext;
 
+static float s_flatNoisePhase = 0.0f;
+
+static float FlatNoise(float param, float multiplier, float phaseMul) {
+    return sinf(param * multiplier + s_flatNoisePhase * phaseMul);
+}
+
 void AudioCallback(void* userdata, SDL_AudioStream* stream, int len, int freq) {
     AudioContext* ctx = (AudioContext*)userdata;
     float* buf = SDL_malloc(len);
@@ -182,8 +188,21 @@ static void TunnelXY(float param, TunnelShape shape, float* outx, float* outy) {
         }
     } else { /* TUNNEL_FLAT */
         float angle = param * 2.0f * M_PI;
-        *outx = cosf(angle) * TUNNEL_RADIUS;
-        *outy = 0.0f;
+        float radiusNoise = FlatNoise(param, 6.5f, 1.1f) * 0.12f;
+        float verticalNoise = FlatNoise(param + 0.5f, 5.0f, 1.5f) * 0.35f;
+        float asymmetry = FlatNoise(param + 1.3f, 9.0f, 0.7f) * 0.07f;
+
+        float radius = TUNNEL_RADIUS * (1.0f + radiusNoise);
+        float xBias = 1.0f + asymmetry;
+        float yBias = 0.15f + verticalNoise * 0.4f + asymmetry * 0.2f;
+        if (yBias < 0.02f) yBias = 0.02f;
+
+        float tiltTowardsViewer = TUNNEL_RADIUS * 0.3f;
+        float yValue = yBias * TUNNEL_RADIUS + tiltTowardsViewer;
+        if (yValue < 0.02f * TUNNEL_RADIUS) yValue = 0.02f * TUNNEL_RADIUS;
+
+        *outx = cosf(angle) * radius * xBias;
+        *outy = yValue;
     }
 }
 
@@ -318,9 +337,12 @@ void MainLoop(void* arg) {
             }
             if (event.key.scancode == SDL_SCANCODE_LEFT) ctx->playerSegment = (ctx->playerSegment - 1 + NUM_SIDES) % NUM_SIDES;
             if (event.key.scancode == SDL_SCANCODE_RIGHT) ctx->playerSegment = (ctx->playerSegment + 1) % NUM_SIDES;
-            if (event.key.scancode == SDL_SCANCODE_1) ctx->tunnelShape = TUNNEL_CIRCLE;
-            if (event.key.scancode == SDL_SCANCODE_2) ctx->tunnelShape = TUNNEL_SQUARE;
-            if (event.key.scancode == SDL_SCANCODE_3) ctx->tunnelShape = TUNNEL_FLAT;
+            if (event.key.scancode == SDL_SCANCODE_1 || event.key.key == SDLK_1) ctx->tunnelShape = TUNNEL_CIRCLE;
+            if (event.key.scancode == SDL_SCANCODE_2 || event.key.key == SDLK_2) ctx->tunnelShape = TUNNEL_SQUARE;
+            if (event.key.scancode == SDL_SCANCODE_3 || event.key.key == SDLK_3) {
+                ctx->tunnelShape = TUNNEL_FLAT;
+                s_flatNoisePhase = ((float)rand() / (float)RAND_MAX) * 2.0f * M_PI;
+            }
             if (event.key.scancode == SDL_SCANCODE_SPACE) {
                 for(int i=0; i<MAX_SHOTS; i++) {
                     if(!ctx->shots[i].active) {
@@ -346,6 +368,8 @@ void MainLoop(void* arg) {
         // Move forward
         ctx->tunnelOffset += 0.02f;
         if (ctx->tunnelOffset >= RING_DISTANCE) ctx->tunnelOffset -= RING_DISTANCE;
+        s_flatNoisePhase += 0.04f;
+        if (s_flatNoisePhase > 2.0f * M_PI) s_flatNoisePhase -= 2.0f * M_PI;
 
         // Update shots
         for(int i=0; i<MAX_SHOTS; i++) {

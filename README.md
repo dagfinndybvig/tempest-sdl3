@@ -29,6 +29,7 @@ To compile natively (Linux):
 - **Space**: Fire shots down the tunnel.
 - **Z**: Activate the Superzapper (once per game - clears all enemies).
 - **R**: Reset the game after a Game Over.
+- **1, 2, 3 Keys**: Switch tunnel geometry while playing. `1` selects the circular tunnel, `2` switches to the square tunnel, and `3` activates the dynamic "flat" tunnel with wobble and tilt.
 
 ## License
 MIT License - feel free to experiment with the code!
