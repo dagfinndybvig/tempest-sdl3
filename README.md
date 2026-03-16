@@ -12,9 +12,14 @@ An experimental 3D vector-style engine built with C and SDL3, compiled to WebAss
 - **Retro Aesthetic**: Neon-on-black color palette inspired by 1980s vector monitors.
 
 ## How to Build
-To compile for the web, ensure you have `emsdk` installed and run:
+To compile for the web (GitHub Pages):
 ```bash
-./build.sh
+./build_web.sh
+```
+
+To compile natively (Linux):
+```bash
+./build_native.sh
 ```
 
 ## Controls
