@@ -27,6 +27,7 @@ typedef struct {
     Uint8* wavData;
     Uint32 wavLen;
     Uint32 wavPos;
+    bool wavActive;
 } AudioContext;
 
 #define NUM_SIDES 16
@@ -73,89 +74,63 @@ typedef struct {
 void AudioCallback(void* userdata, SDL_AudioStream* stream, int len, int freq) {
     AudioContext* ctx = (AudioContext*)userdata;
     float* buf = SDL_malloc(len);
-    
-    for (int i = 0; i < len / (int)sizeof(float); i++) {
+    int samples = len / (int)sizeof(float);
+
+    for (int i = 0; i < samples; i++) {
         float sample = 0.0f;
-        
-        if (ctx->wavData && ctx->wavLen > 0) {
-            int16_t s16 = (int16_t)((ctx->wavData[ctx->wavPos + 1] << 8) | ctx->wavData[ctx->wavPos]);
-            sample = s16 / 32768.0f;
-            ctx->wavPos += 2;
-            if (ctx->wavPos >= ctx->wavLen) {
+
+        /* Play WAV only when explicitly activated */
+        if (ctx->wavData && ctx->wavLen > 0 && ctx->wavActive) {
+            if (ctx->wavPos + 1 < ctx->wavLen) {
+                int16_t s16 = (int16_t)((ctx->wavData[ctx->wavPos + 1] << 8) | ctx->wavData[ctx->wavPos]);
+                sample += s16 / 32768.0f;
+                ctx->wavPos += 2;
+            } else {
+                /* Reached end of the WAV buffer: stop playback */
+                ctx->wavActive = false;
                 ctx->wavPos = 0;
             }
-            for (int s = 0; s < NUM_SOUND_SLOTS; s++) {
-                if (ctx->sounds[s].active) {
-                    float t = ctx->sounds[s].phase;
-                    float progress = t / ctx->sounds[s].duration;
-                    float currentFreq = ctx->sounds[s].freqStart + (ctx->sounds[s].freqEnd - ctx->sounds[s].freqStart) * progress;
-                    float v = ctx->sounds[s].volume;
-                    
-                    if (ctx->sounds[s].type == 0) {
-                        float env = expf(-t * 15.0f);
-                        sample += sinf(t * currentFreq * 2.0f * M_PI) * v * env;
-                    } else if (ctx->sounds[s].type == 1) {
-                        float env = expf(-t * 5.0f);
-                        float mod = sinf(t * 15.0f * 2.0f * M_PI);
-                        sample += (sinf(t * currentFreq * 2.0f * M_PI) + mod * 0.3f) * v * env;
-                    } else if (ctx->sounds[s].type == 2) {
-                        float env = expf(-t * 8.0f);
-                        float noise = ((float)(rand() % 100) / 100.0f - 0.5f) * 2.0f;
-                        sample += noise * v * env;
-                    } else if (ctx->sounds[s].type == 3) {
-                        float env = 1.0f - progress;
-                        float mod = sinf(t * 8.0f * 2.0f * M_PI);
-                        sample += (sinf(t * currentFreq * 2.0f * M_PI) + mod * 0.5f) * v * env;
-                    } else {
-                        sample += sinf(t * currentFreq * 2.0f * M_PI) * v;
-                    }
-                    
-                    ctx->sounds[s].phase += 1.0f / freq;
-                    if (ctx->sounds[s].phase >= ctx->sounds[s].duration) {
-                        ctx->sounds[s].active = false;
-                    }
+        }
+
+        /* Mix in procedural sounds */
+        for (int s = 0; s < NUM_SOUND_SLOTS; s++) {
+            if (ctx->sounds[s].active) {
+                float t = ctx->sounds[s].phase;
+                float progress = t / ctx->sounds[s].duration;
+                float currentFreq = ctx->sounds[s].freqStart + (ctx->sounds[s].freqEnd - ctx->sounds[s].freqStart) * progress;
+                float v = ctx->sounds[s].volume;
+
+                if (ctx->sounds[s].type == 0) {
+                    float env = expf(-t * 15.0f);
+                    sample += sinf(t * currentFreq * 2.0f * M_PI) * v * env;
+                } else if (ctx->sounds[s].type == 1) {
+                    float env = expf(-t * 5.0f);
+                    float mod = sinf(t * 15.0f * 2.0f * M_PI);
+                    sample += (sinf(t * currentFreq * 2.0f * M_PI) + mod * 0.3f) * v * env;
+                } else if (ctx->sounds[s].type == 2) {
+                    float env = expf(-t * 8.0f);
+                    float noise = ((float)(rand() % 100) / 100.0f - 0.5f) * 2.0f;
+                    sample += noise * v * env;
+                } else if (ctx->sounds[s].type == 3) {
+                    float env = 1.0f - progress;
+                    float mod = sinf(t * 8.0f * 2.0f * M_PI);
+                    sample += (sinf(t * currentFreq * 2.0f * M_PI) + mod * 0.5f) * v * env;
+                } else {
+                    sample += sinf(t * currentFreq * 2.0f * M_PI) * v;
                 }
-            }
-        } else {
-            for (int s = 0; s < NUM_SOUND_SLOTS; s++) {
-                if (ctx->sounds[s].active) {
-                    float t = ctx->sounds[s].phase;
-                    float progress = t / ctx->sounds[s].duration;
-                    float currentFreq = ctx->sounds[s].freqStart + (ctx->sounds[s].freqEnd - ctx->sounds[s].freqStart) * progress;
-                    float v = ctx->sounds[s].volume;
-                    
-                    if (ctx->sounds[s].type == 0) {
-                        float env = expf(-t * 15.0f);
-                        sample += sinf(t * currentFreq * 2.0f * M_PI) * v * env;
-                    } else if (ctx->sounds[s].type == 1) {
-                        float env = expf(-t * 5.0f);
-                        float mod = sinf(t * 15.0f * 2.0f * M_PI);
-                        sample += (sinf(t * currentFreq * 2.0f * M_PI) + mod * 0.3f) * v * env;
-                    } else if (ctx->sounds[s].type == 2) {
-                        float env = expf(-t * 8.0f);
-                        float noise = ((float)(rand() % 100) / 100.0f - 0.5f) * 2.0f;
-                        sample += noise * v * env;
-                    } else if (ctx->sounds[s].type == 3) {
-                        float env = 1.0f - progress;
-                        float mod = sinf(t * 8.0f * 2.0f * M_PI);
-                        sample += (sinf(t * currentFreq * 2.0f * M_PI) + mod * 0.5f) * v * env;
-                    } else {
-                        sample += sinf(t * currentFreq * 2.0f * M_PI) * v;
-                    }
-                    
-                    ctx->sounds[s].phase += 1.0f / freq;
-                    if (ctx->sounds[s].phase >= ctx->sounds[s].duration) {
-                        ctx->sounds[s].active = false;
-                    }
+
+                ctx->sounds[s].phase += 1.0f / freq;
+                if (ctx->sounds[s].phase >= ctx->sounds[s].duration) {
+                    ctx->sounds[s].active = false;
                 }
             }
         }
-        
+
         if (sample > 1.0f) sample = 1.0f;
         if (sample < -1.0f) sample = -1.0f;
         buf[i] = sample;
     }
-    
+
     SDL_PutAudioStreamData(stream, buf, len);
     SDL_free(buf);
 }
@@ -177,6 +152,7 @@ void PlaySound(AudioContext* ctx, int type, float freqStart, float freqEnd, floa
 
 void PlayWav(AudioContext* ctx) {
     ctx->wavPos = 0;
+    ctx->wavActive = true;
 }
 
 void Project(Point3D p, int width, int height, float* sx, float* sy) {
