@@ -55,9 +55,10 @@ typedef struct {
 } Enemy;
 
 typedef enum {
-    TUNNEL_CIRCLE = 0,
-    TUNNEL_SQUARE = 1,
-    TUNNEL_FLAT = 2
+    TUNNEL_IRREGULAR = 0,
+    TUNNEL_CIRCLE = 1,
+    TUNNEL_SQUARE = 2,
+    TUNNEL_FLAT = 3
 } TunnelShape;
 
 typedef struct {
@@ -78,10 +79,19 @@ typedef struct {
     TunnelShape tunnelShape;
 } AppContext;
 
-static float s_flatNoisePhase = 0.0f;
+void ResetGame(AppContext* ctx);
 
-static float FlatNoise(float param, float multiplier, float phaseMul) {
-    return sinf(param * multiplier + s_flatNoisePhase * phaseMul);
+static float s_noisePhase = 0.0f;
+
+static float NoiseValue(float param, float multiplier, float phaseMul) {
+    return sinf(param * multiplier + s_noisePhase * phaseMul);
+}
+
+static float StaticJagged(float param) {
+    float jitter = sinf(param * 13.17f) * 0.12f + sinf(param * 29.41f) * 0.08f;
+    if (jitter > 0.2f) jitter = 0.2f;
+    if (jitter < -0.2f) jitter = -0.2f;
+    return jitter;
 }
 
 void AudioCallback(void* userdata, SDL_AudioStream* stream, int len, int freq) {
@@ -168,9 +178,18 @@ void Project(Point3D p, int width, int height, float* sx, float* sy) {
 }
 
 /* Compute XY coordinates on the tunnel rim given a param in [0,1).
-   Supports circle, square, and flat shapes. */
+   Supports circular, square, flat, and irregular shapes. */
 static void TunnelXY(float param, TunnelShape shape, float* outx, float* outy) {
-    if (shape == TUNNEL_CIRCLE) {
+    if (shape == TUNNEL_IRREGULAR) {
+        float jitter = StaticJagged(param);
+        float irregularParam = param + jitter;
+        if (irregularParam < 0.0f) irregularParam += 1.0f;
+        if (irregularParam >= 1.0f) irregularParam -= 1.0f;
+
+        float angle = irregularParam * 2.0f * M_PI;
+        *outx = cosf(angle) * TUNNEL_RADIUS;
+        *outy = sinf(angle) * TUNNEL_RADIUS;
+    } else if (shape == TUNNEL_CIRCLE) {
         float angle = param * 2.0f * M_PI;
         *outx = cosf(angle) * TUNNEL_RADIUS;
         *outy = sinf(angle) * TUNNEL_RADIUS;
@@ -188,9 +207,9 @@ static void TunnelXY(float param, TunnelShape shape, float* outx, float* outy) {
         }
     } else { /* TUNNEL_FLAT */
         float angle = param * 2.0f * M_PI;
-        float radiusNoise = FlatNoise(param, 6.5f, 1.1f) * 0.12f;
-        float verticalNoise = FlatNoise(param + 0.5f, 5.0f, 1.5f) * 0.35f;
-        float asymmetry = FlatNoise(param + 1.3f, 9.0f, 0.7f) * 0.07f;
+        float radiusNoise = NoiseValue(param, 6.5f, 1.1f) * 0.12f;
+        float verticalNoise = NoiseValue(param + 0.5f, 5.0f, 1.5f) * 0.35f;
+        float asymmetry = NoiseValue(param + 1.3f, 9.0f, 0.7f) * 0.07f;
 
         float radius = TUNNEL_RADIUS * (1.0f + radiusNoise);
         float xBias = 1.0f + asymmetry;
@@ -204,6 +223,33 @@ static void TunnelXY(float param, TunnelShape shape, float* outx, float* outy) {
         *outx = cosf(angle) * radius * xBias;
         *outy = yValue;
     }
+}
+
+static bool ShotEnemyHit(AppContext* ctx, const Shot* shot, const Enemy* enemy) {
+    if (fabsf(shot->z - enemy->z) >= 1.0f) return false;
+    float shotX, shotY, enemyX, enemyY;
+    TunnelXY((float)shot->segment / NUM_SIDES, ctx->tunnelShape, &shotX, &shotY);
+    TunnelXY((float)enemy->segment / NUM_SIDES, ctx->tunnelShape, &enemyX, &enemyY);
+    float dx = shotX - enemyX;
+    float dy = shotY - enemyY;
+    float threshold = TUNNEL_RADIUS * 0.45f;
+    return (dx * dx + dy * dy) <= (threshold * threshold);
+}
+
+static bool RestartWithShape(AppContext* ctx, SDL_Scancode scancode, SDL_Keycode key) {
+    TunnelShape shape = -1;
+    if (scancode == SDL_SCANCODE_0 || key == SDLK_0) shape = TUNNEL_IRREGULAR;
+    else if (scancode == SDL_SCANCODE_1 || key == SDLK_1) shape = TUNNEL_CIRCLE;
+    else if (scancode == SDL_SCANCODE_2 || key == SDLK_2) shape = TUNNEL_SQUARE;
+    else if (scancode == SDL_SCANCODE_3 || key == SDLK_3) shape = TUNNEL_FLAT;
+
+    if (shape < 0) return false;
+    ResetGame(ctx);
+    ctx->tunnelShape = shape;
+    if (shape == TUNNEL_FLAT) {
+        s_noisePhase = ((float)rand() / (float)RAND_MAX) * 2.0f * M_PI;
+    }
+    return true;
 }
 
 void DrawBlaster(AppContext* ctx, int w, int h) {
@@ -332,16 +378,25 @@ void MainLoop(void* arg) {
         }
         if (event.type == SDL_EVENT_KEY_DOWN) {
             if (ctx->gameOver) {
-                if (event.key.scancode == SDL_SCANCODE_R) ResetGame(ctx);
+                if (event.key.scancode == SDL_SCANCODE_R) {
+                    ResetGame(ctx);
+                    continue;
+                }
+                if (RestartWithShape(ctx, event.key.scancode, event.key.key)) {
+                    continue;
+                }
                 continue;
             }
             if (event.key.scancode == SDL_SCANCODE_LEFT) ctx->playerSegment = (ctx->playerSegment - 1 + NUM_SIDES) % NUM_SIDES;
             if (event.key.scancode == SDL_SCANCODE_RIGHT) ctx->playerSegment = (ctx->playerSegment + 1) % NUM_SIDES;
+            if (event.key.scancode == SDL_SCANCODE_0 || event.key.key == SDLK_0) {
+                ctx->tunnelShape = TUNNEL_IRREGULAR;
+            }
             if (event.key.scancode == SDL_SCANCODE_1 || event.key.key == SDLK_1) ctx->tunnelShape = TUNNEL_CIRCLE;
             if (event.key.scancode == SDL_SCANCODE_2 || event.key.key == SDLK_2) ctx->tunnelShape = TUNNEL_SQUARE;
             if (event.key.scancode == SDL_SCANCODE_3 || event.key.key == SDLK_3) {
                 ctx->tunnelShape = TUNNEL_FLAT;
-                s_flatNoisePhase = ((float)rand() / (float)RAND_MAX) * 2.0f * M_PI;
+                s_noisePhase = ((float)rand() / (float)RAND_MAX) * 2.0f * M_PI;
             }
             if (event.key.scancode == SDL_SCANCODE_SPACE) {
                 for(int i=0; i<MAX_SHOTS; i++) {
@@ -368,8 +423,8 @@ void MainLoop(void* arg) {
         // Move forward
         ctx->tunnelOffset += 0.02f;
         if (ctx->tunnelOffset >= RING_DISTANCE) ctx->tunnelOffset -= RING_DISTANCE;
-        s_flatNoisePhase += 0.04f;
-        if (s_flatNoisePhase > 2.0f * M_PI) s_flatNoisePhase -= 2.0f * M_PI;
+        s_noisePhase += 0.04f;
+        if (s_noisePhase > 2.0f * M_PI) s_noisePhase -= 2.0f * M_PI;
 
         // Update shots
         for(int i=0; i<MAX_SHOTS; i++) {
@@ -408,14 +463,12 @@ void MainLoop(void* arg) {
                 }
 
                 for (int j = 0; j < MAX_SHOTS; j++) {
-                    if (ctx->shots[j].active && ctx->shots[j].segment == ctx->enemies[i].segment) {
-                        if (fabsf(ctx->shots[j].z - ctx->enemies[i].z) < 1.0f) {
-                            ctx->shots[j].active = false;
-                            ctx->enemies[i].active = false;
-                            ctx->score += 100;
-                            PlaySound(&ctx->audio, 0, 800.0f, 150.0f, 0.12f, 0.35f);
-                            break;
-                        }
+                    if (ctx->shots[j].active && ShotEnemyHit(ctx, &ctx->shots[j], &ctx->enemies[i])) {
+                        ctx->shots[j].active = false;
+                        ctx->enemies[i].active = false;
+                        ctx->score += 100;
+                        PlaySound(&ctx->audio, 0, 800.0f, 150.0f, 0.12f, 0.35f);
+                        break;
                     }
                 }
             }
