@@ -56,8 +56,8 @@ For explosions when enemies are hit, implement a simple particle system:
 ---
 
 ## 📅 Roadmap / TODO
-- [ ] Implement player health/lives and "Game Over" state.
+- [x] Implement player health/lives and "Game Over" state.
 - [ ] Add sound effects using SDL_Audio.
 - [ ] Implement different tunnel shapes (square, "flat" open tracks).
 - [ ] Add "Spikers" that leave trails behind them.
-- [ ] Implement the "Superzapper" (screen-clear ability).
+- [x] Implement the "Superzapper" (screen-clear ability).

@@ -43,6 +43,8 @@ typedef struct {
     Uint64 lastSpawnTime;
     int lives;
     bool gameOver;
+    bool superzapperUsed;
+    int flashTimer;
 } AppContext;
 
 void Project(Point3D p, int width, int height, float* sx, float* sy) {
@@ -95,6 +97,8 @@ void DrawBlaster(AppContext* ctx, int w, int h) {
 void ResetGame(AppContext* ctx) {
     ctx->lives = 3;
     ctx->gameOver = false;
+    ctx->superzapperUsed = false;
+    ctx->flashTimer = 0;
     ctx->playerSegment = 0;
     for(int i=0; i<MAX_SHOTS; i++) ctx->shots[i].active = false;
     for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
@@ -130,10 +134,16 @@ void MainLoop(void* arg) {
                     }
                 }
             }
+            if (event.key.scancode == SDL_SCANCODE_Z && !ctx->superzapperUsed) {
+                ctx->superzapperUsed = true;
+                ctx->flashTimer = 10; // 10 frames of flash
+                for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
+            }
         }
     }
 
     if (!ctx->gameOver) {
+        if (ctx->flashTimer > 0) ctx->flashTimer--;
         // Move forward
         ctx->tunnelOffset += 0.02f;
         if (ctx->tunnelOffset >= RING_DISTANCE) ctx->tunnelOffset -= RING_DISTANCE;
@@ -186,6 +196,8 @@ void MainLoop(void* arg) {
 
     if (ctx->gameOver) {
         SDL_SetRenderDrawColor(ctx->renderer, 50, 0, 0, 255); // Dark red background
+    } else if (ctx->flashTimer > 0) {
+        SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 255); // White flash
     } else {
         SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 10, 255);
     }
