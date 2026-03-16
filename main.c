@@ -45,6 +45,7 @@ typedef struct {
     bool gameOver;
     bool superzapperUsed;
     int flashTimer;
+    int score;
 } AppContext;
 
 void Project(Point3D p, int width, int height, float* sx, float* sy) {
@@ -96,6 +97,7 @@ void DrawBlaster(AppContext* ctx, int w, int h) {
 
 void ResetGame(AppContext* ctx) {
     ctx->lives = 3;
+    ctx->score = 0;
     ctx->gameOver = false;
     ctx->superzapperUsed = false;
     ctx->flashTimer = 0;
@@ -104,19 +106,54 @@ void ResetGame(AppContext* ctx) {
     for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
 }
 
+void DrawDigit(SDL_Renderer* renderer, int digit, float x, float y, float size) {
+    // Simple segment-based digits
+    bool segments[10][7] = {
+        {1,1,1,0,1,1,1}, // 0
+        {0,0,1,0,0,1,0}, // 1
+        {1,0,1,1,1,0,1}, // 2
+        {1,0,1,1,0,1,1}, // 3
+        {0,1,1,1,0,1,0}, // 4
+        {1,1,0,1,0,1,1}, // 5
+        {1,1,0,1,1,1,1}, // 6
+        {1,0,1,0,0,1,0}, // 7
+        {1,1,1,1,1,1,1}, // 8
+        {1,1,1,1,0,1,1}  // 9
+    };
+    // 0: top, 1: top-left, 2: top-right, 3: middle, 4: bottom-left, 5: bottom-right, 6: bottom
+    if (segments[digit][0]) SDL_RenderLine(renderer, x, y, x + size, y);
+    if (segments[digit][1]) SDL_RenderLine(renderer, x, y, x, y + size);
+    if (segments[digit][2]) SDL_RenderLine(renderer, x + size, y, x + size, y + size);
+    if (segments[digit][3]) SDL_RenderLine(renderer, x, y + size, x + size, y + size);
+    if (segments[digit][4]) SDL_RenderLine(renderer, x, y + size, x, y + 2 * size);
+    if (segments[digit][5]) SDL_RenderLine(renderer, x + size, y + size, x + size, y + 2 * size);
+    if (segments[digit][6]) SDL_RenderLine(renderer, x, y + 2 * size, x + size, y + 2 * size);
+}
+
+void DrawScore(SDL_Renderer* renderer, int score, float x, float y, float size) {
+    int temp = score;
+    for (int i = 0; i < 6; i++) {
+        DrawDigit(renderer, temp % 10, x - i * (size * 1.5f), y, size);
+        temp /= 10;
+        if (temp == 0 && i > 0) break;
+    }
+}
+
 void DrawHUD(AppContext* ctx, int w, int h) {
     SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 0, 255);
     for (int i = 0; i < ctx->lives; i++) {
         float x = 20.0f + i * 30.0f;
         float y = 20.0f;
         float size = 10.0f;
-        // Draw a small "U" shape
         SDL_RenderLine(ctx->renderer, x, y, x, y + size);
         SDL_RenderLine(ctx->renderer, x, y + size, x + size, y + size);
         SDL_RenderLine(ctx->renderer, x + size, y + size, x + size, y);
     }
     
-    // If superzapper is available, draw a small indicator
+    // Draw Score
+    SDL_SetRenderDrawColor(ctx->renderer, 0, 255, 255, 255); // Cyan score
+    DrawScore(ctx->renderer, ctx->score, (float)w - 40.0f, 20.0f, 10.0f);
+    
     if (!ctx->superzapperUsed) {
         SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 255);
         SDL_RenderLine(ctx->renderer, 20, 45, 30, 45);
@@ -206,7 +243,9 @@ void MainLoop(void* arg) {
                         if (fabsf(ctx->shots[j].z - ctx->enemies[i].z) < 1.0f) {
                             ctx->shots[j].active = false;
                             ctx->enemies[i].active = false;
+                            ctx->score += 100;
                             break;
+
                         }
                     }
                 }
