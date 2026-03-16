@@ -136,18 +136,9 @@ void AudioCallback(void* userdata, SDL_AudioStream* stream, int len, int freq) {
 }
 
 void PlaySound(AudioContext* ctx, int type, float freqStart, float freqEnd, float duration, float volume) {
-    for (int i = 0; i < NUM_SOUND_SLOTS; i++) {
-        if (!ctx->sounds[i].active) {
-            ctx->sounds[i].type = type;
-            ctx->sounds[i].freqStart = freqStart;
-            ctx->sounds[i].freqEnd = freqEnd;
-            ctx->sounds[i].duration = duration;
-            ctx->sounds[i].volume = volume;
-            ctx->sounds[i].phase = 0.0f;
-            ctx->sounds[i].active = true;
-            return;
-        }
-    }
+    (void)ctx; (void)type; (void)freqStart; (void)freqEnd; (void)duration; (void)volume;
+    /* Procedural sounds disabled: only laserzap.wav (PlayWav) will produce audio. */
+    return;
 }
 
 void PlayWav(AudioContext* ctx) {
