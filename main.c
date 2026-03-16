@@ -3,10 +3,12 @@
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
+#include <ctype.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 
 #define NUM_SOUND_SLOTS 4
@@ -73,13 +75,146 @@ typedef struct {
     Uint64 lastSpawnTime;
     int lives;
     bool gameOver;
+    TunnelShape gameOverShape;
     bool superzapperUsed;
     int flashTimer;
     int score;
     TunnelShape tunnelShape;
+    TunnelShape selectedTunnelShape;
 } AppContext;
 
+typedef struct {
+    float x0, y0, x1, y1;
+} GlyphLine;
+
+typedef struct {
+    char ch;
+    const GlyphLine* lines;
+    int count;
+} Glyph;
+
+static const GlyphLine glyphP[] = {
+    {0.0f, 0.0f, 0.0f, 1.0f},
+    {0.0f, 1.0f, 0.65f, 1.0f},
+    {0.65f, 1.0f, 0.65f, 0.55f},
+    {0.65f, 0.55f, 0.0f, 0.55f},
+};
+
+static const GlyphLine glyphR[] = {
+    {0.0f, 0.0f, 0.0f, 1.0f},
+    {0.0f, 1.0f, 0.65f, 1.0f},
+    {0.65f, 1.0f, 0.65f, 0.55f},
+    {0.65f, 0.55f, 0.0f, 0.55f},
+    {0.0f, 0.55f, 1.0f, 0.0f},
+};
+
+static const GlyphLine glyphE[] = {
+    {0.0f, 0.0f, 0.0f, 1.0f},
+    {0.0f, 1.0f, 1.0f, 1.0f},
+    {0.0f, 0.5f, 0.75f, 0.5f},
+    {0.0f, 0.0f, 1.0f, 0.0f},
+};
+
+static const GlyphLine glyphS[] = {
+    {0.9f, 1.0f, 0.2f, 1.0f},
+    {0.2f, 1.0f, 0.0f, 0.5f},
+    {0.0f, 0.5f, 0.65f, 0.5f},
+    {0.65f, 0.5f, 1.0f, 0.35f},
+    {1.0f, 0.35f, 0.1f, 0.0f},
+};
+
+static const GlyphLine glyphA[] = {
+    {0.0f, 0.0f, 0.4f, 1.0f},
+    {0.4f, 1.0f, 0.8f, 0.0f},
+    {0.15f, 0.5f, 0.65f, 0.5f},
+};
+
+static const GlyphLine glyphN[] = {
+    {0.0f, 0.0f, 0.0f, 1.0f},
+    {0.0f, 1.0f, 1.0f, 0.0f},
+    {1.0f, 0.0f, 1.0f, 1.0f},
+};
+
+static const GlyphLine glyphY[] = {
+    {0.0f, 1.0f, 0.5f, 0.5f},
+    {1.0f, 1.0f, 0.5f, 0.5f},
+    {0.5f, 0.5f, 0.5f, 0.0f},
+};
+
+static const GlyphLine glyphK[] = {
+    {0.0f, 0.0f, 0.0f, 1.0f},
+    {0.0f, 0.5f, 1.0f, 1.0f},
+    {0.0f, 0.5f, 1.0f, 0.0f},
+};
+
+static const Glyph glyphs[] = {
+    {'P', glyphP, (int)(sizeof(glyphP) / sizeof(GlyphLine))},
+    {'R', glyphR, (int)(sizeof(glyphR) / sizeof(GlyphLine))},
+    {'E', glyphE, (int)(sizeof(glyphE) / sizeof(GlyphLine))},
+    {'S', glyphS, (int)(sizeof(glyphS) / sizeof(GlyphLine))},
+    {'A', glyphA, (int)(sizeof(glyphA) / sizeof(GlyphLine))},
+    {'N', glyphN, (int)(sizeof(glyphN) / sizeof(GlyphLine))},
+    {'Y', glyphY, (int)(sizeof(glyphY) / sizeof(GlyphLine))},
+    {'K', glyphK, (int)(sizeof(glyphK) / sizeof(GlyphLine))},
+};
+
 void ResetGame(AppContext* ctx);
+static void ContinueGameWithSelectedGeometry(AppContext* ctx);
+
+static const Glyph* GetGlyphByChar(char ch) {
+    ch = (char)toupper((unsigned char)ch);
+    for (size_t i = 0; i < sizeof(glyphs) / sizeof(glyphs[0]); i++) {
+        if (glyphs[i].ch == ch) return &glyphs[i];
+    }
+    return NULL;
+}
+
+static float MeasureGlyphStringWidth(const char* text, float size, float spacing) {
+    float width = 0.0f;
+    for (const char* ptr = text; *ptr; ptr++) {
+        float charWidth = (*ptr == ' ') ? size * 0.6f : size;
+        width += charWidth + spacing;
+    }
+    if (width > 0.0f) width -= spacing;
+    return width;
+}
+
+static void DrawGlyphString(SDL_Renderer* renderer, const char* text, float x, float y, float size, float spacing) {
+    float cursor = x;
+    for (const char* ptr = text; *ptr; ptr++) {
+        char ch = *ptr;
+        float charWidth = (ch == ' ') ? size * 0.6f : size;
+        if (ch != ' ') {
+            const Glyph* glyph = GetGlyphByChar(ch);
+            if (glyph) {
+                for (int i = 0; i < glyph->count; i++) {
+                    const GlyphLine* line = &glyph->lines[i];
+                    float glyphHeight = size;
+                    float x0 = cursor + line->x0 * size;
+                    float y0 = y + (1.0f - line->y0) * glyphHeight;
+                    float x1 = cursor + line->x1 * size;
+                    float y1 = y + (1.0f - line->y1) * glyphHeight;
+                    SDL_RenderLine(renderer, x0, y0, x1, y1);
+                }
+            }
+        }
+        cursor += charWidth + spacing;
+    }
+}
+
+static void DrawGameOverPrompt(AppContext* ctx, int w, int h) {
+    const char* message = "PRESS ANY KEY";
+    float size = 32.0f;
+    float spacing = size * 0.25f;
+    float totalWidth = MeasureGlyphStringWidth(message, size, spacing);
+    float startX = ((float)w - totalWidth) * 0.5f;
+    float startY = h * 0.55f;
+    SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 220);
+    DrawGlyphString(ctx->renderer, message, startX, startY, size, spacing);
+}
+
+void PlaySound(AudioContext* ctx, int type, float freqStart, float freqEnd, float duration, float volume);
+
 
 static float s_noisePhase = 0.0f;
 
@@ -92,6 +227,32 @@ static float StaticJagged(float param) {
     if (jitter > 0.2f) jitter = 0.2f;
     if (jitter < -0.2f) jitter = -0.2f;
     return jitter;
+}
+
+static void ApplyTunnelShape(AppContext* ctx, TunnelShape shape) {
+    ctx->tunnelShape = shape;
+    if (shape == TUNNEL_FLAT) {
+        s_noisePhase = ((float)rand() / (float)RAND_MAX) * 2.0f * M_PI;
+    }
+}
+
+static void SelectTunnelShape(AppContext* ctx, TunnelShape shape) {
+    if (shape < TUNNEL_IRREGULAR || shape > TUNNEL_FLAT) {
+        shape = TUNNEL_CIRCLE;
+    }
+    ctx->selectedTunnelShape = shape;
+    ApplyTunnelShape(ctx, shape);
+}
+
+static void TriggerGameOverShape(AppContext* ctx) {
+    if (ctx->gameOver) return;
+    ctx->gameOver = true;
+    TunnelShape randomShape = (TunnelShape)(rand() % 4);
+    ctx->gameOverShape = randomShape;
+    ctx->selectedTunnelShape = randomShape;
+    ApplyTunnelShape(ctx, randomShape);
+    fprintf(stderr, "DEBUG: GameOver triggered, gameOverShape=%d, selectedTunnelShape=%d, tunnelShape=%d\n", ctx->gameOverShape, ctx->selectedTunnelShape, ctx->tunnelShape);
+    PlaySound(&ctx->audio, 2, 100.0f, 50.0f, 0.5f, 0.7f);
 }
 
 void AudioCallback(void* userdata, SDL_AudioStream* stream, int len, int freq) {
@@ -236,19 +397,17 @@ static bool ShotEnemyHit(AppContext* ctx, const Shot* shot, const Enemy* enemy) 
     return (dx * dx + dy * dy) <= (threshold * threshold);
 }
 
-static bool RestartWithShape(AppContext* ctx, SDL_Scancode scancode, SDL_Keycode key) {
-    TunnelShape shape = -1;
+static bool RestartWithShape(AppContext* ctx, SDL_Scancode scancode, SDL_Keycode key, bool repeat) {
+    if (repeat) return false;
+    int shape = -1;
     if (scancode == SDL_SCANCODE_0 || key == SDLK_0) shape = TUNNEL_IRREGULAR;
     else if (scancode == SDL_SCANCODE_1 || key == SDLK_1) shape = TUNNEL_CIRCLE;
     else if (scancode == SDL_SCANCODE_2 || key == SDLK_2) shape = TUNNEL_SQUARE;
     else if (scancode == SDL_SCANCODE_3 || key == SDLK_3) shape = TUNNEL_FLAT;
 
     if (shape < 0) return false;
+    SelectTunnelShape(ctx, (TunnelShape)shape);
     ResetGame(ctx);
-    ctx->tunnelShape = shape;
-    if (shape == TUNNEL_FLAT) {
-        s_noisePhase = ((float)rand() / (float)RAND_MAX) * 2.0f * M_PI;
-    }
     return true;
 }
 
@@ -303,7 +462,21 @@ void ResetGame(AppContext* ctx) {
     ctx->superzapperUsed = false;
     ctx->flashTimer = 0;
     ctx->playerSegment = 0;
-    ctx->tunnelShape = TUNNEL_CIRCLE;
+    ApplyTunnelShape(ctx, ctx->selectedTunnelShape);
+    for(int i=0; i<MAX_SHOTS; i++) ctx->shots[i].active = false;
+    for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
+}
+
+static void ContinueGameWithSelectedGeometry(AppContext* ctx) {
+    ctx->lives = 3;
+    ctx->score = 0;
+    ctx->gameOver = false;
+    ctx->superzapperUsed = false;
+    ctx->flashTimer = 0;
+    ctx->playerSegment = 0;
+    fprintf(stderr, "DEBUG: ContinueGameWithSelectedGeometry using gameOverShape=%d\n", ctx->gameOverShape);
+    ctx->selectedTunnelShape = ctx->gameOverShape;
+    ApplyTunnelShape(ctx, ctx->gameOverShape);
     for(int i=0; i<MAX_SHOTS; i++) ctx->shots[i].active = false;
     for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
 }
@@ -378,25 +551,33 @@ void MainLoop(void* arg) {
         }
         if (event.type == SDL_EVENT_KEY_DOWN) {
             if (ctx->gameOver) {
-                if (event.key.scancode == SDL_SCANCODE_R) {
-                    ResetGame(ctx);
+                fprintf(stderr, "DEBUG: Key pressed during gameOver. scancode=%d, key=%d, repeat=%d\n", event.key.scancode, event.key.key, event.key.repeat);
+                // Try to restart with a specific shape (0-3 keys)
+                if (RestartWithShape(ctx, event.key.scancode, event.key.key, event.key.repeat)) {
+                    fprintf(stderr, "DEBUG: RestartWithShape returned true\n");
                     continue;
                 }
-                if (RestartWithShape(ctx, event.key.scancode, event.key.key)) {
-                    continue;
-                }
+                // Any other key: restart with the already-selected random geometry
+                fprintf(stderr, "DEBUG: Calling ContinueGameWithSelectedGeometry, selectedTunnelShape=%d\n", ctx->selectedTunnelShape);
+                ContinueGameWithSelectedGeometry(ctx);
+                fprintf(stderr, "DEBUG: After continue, gameOver=%d, selectedTunnelShape=%d, tunnelShape=%d\n", ctx->gameOver, ctx->selectedTunnelShape, ctx->tunnelShape);
                 continue;
             }
             if (event.key.scancode == SDL_SCANCODE_LEFT) ctx->playerSegment = (ctx->playerSegment - 1 + NUM_SIDES) % NUM_SIDES;
             if (event.key.scancode == SDL_SCANCODE_RIGHT) ctx->playerSegment = (ctx->playerSegment + 1) % NUM_SIDES;
-            if (event.key.scancode == SDL_SCANCODE_0 || event.key.key == SDLK_0) {
-                ctx->tunnelShape = TUNNEL_IRREGULAR;
-            }
-            if (event.key.scancode == SDL_SCANCODE_1 || event.key.key == SDLK_1) ctx->tunnelShape = TUNNEL_CIRCLE;
-            if (event.key.scancode == SDL_SCANCODE_2 || event.key.key == SDLK_2) ctx->tunnelShape = TUNNEL_SQUARE;
-            if (event.key.scancode == SDL_SCANCODE_3 || event.key.key == SDLK_3) {
-                ctx->tunnelShape = TUNNEL_FLAT;
-                s_noisePhase = ((float)rand() / (float)RAND_MAX) * 2.0f * M_PI;
+            if (!ctx->gameOver) {
+                if (event.key.scancode == SDL_SCANCODE_0 || event.key.key == SDLK_0) {
+                    SelectTunnelShape(ctx, TUNNEL_IRREGULAR);
+                }
+                if (event.key.scancode == SDL_SCANCODE_1 || event.key.key == SDLK_1) {
+                    SelectTunnelShape(ctx, TUNNEL_CIRCLE);
+                }
+                if (event.key.scancode == SDL_SCANCODE_2 || event.key.key == SDLK_2) {
+                    SelectTunnelShape(ctx, TUNNEL_SQUARE);
+                }
+                if (event.key.scancode == SDL_SCANCODE_3 || event.key.key == SDLK_3) {
+                    SelectTunnelShape(ctx, TUNNEL_FLAT);
+                }
             }
             if (event.key.scancode == SDL_SCANCODE_SPACE) {
                 for(int i=0; i<MAX_SHOTS; i++) {
@@ -457,8 +638,7 @@ void MainLoop(void* arg) {
                     ctx->lives--;
                     PlaySound(&ctx->audio, 2, 100.0f, 100.0f, 0.15f, 0.5f);
                     if (ctx->lives <= 0) {
-                        ctx->gameOver = true;
-                        PlaySound(&ctx->audio, 2, 100.0f, 50.0f, 0.5f, 0.7f);
+                        TriggerGameOverShape(ctx);
                     }
                 }
 
@@ -573,6 +753,9 @@ void MainLoop(void* arg) {
 
     DrawBlaster(ctx, w, h);
     DrawHUD(ctx, w, h);
+    if (ctx->gameOver) {
+        DrawGameOverPrompt(ctx, w, h);
+    }
 
     SDL_RenderPresent(ctx->renderer);
 }
@@ -581,6 +764,7 @@ int main(int argc, char* argv[]) {
     srand((unsigned int)time(NULL));
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) return 1;
     AppContext ctx = {0};
+    ctx.selectedTunnelShape = TUNNEL_CIRCLE;
     ctx.window = SDL_CreateWindow("Tempest SDL3", 800, 800, 0);
     ctx.renderer = SDL_CreateRenderer(ctx.window, NULL);
     
