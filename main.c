@@ -727,7 +727,7 @@ void MainLoop(void* arg) {
             float param1 = (float)ctx->shots[i].segment / (float)NUM_SIDES;
             float param2 = (float)(ctx->shots[i].segment + 1) / (float)NUM_SIDES;
             float z_start = ctx->shots[i].z;
-            float z_end = z_start + 0.5f;
+            float z_end = z_start + 0.9f;
 
             float tx1, ty1, tx2, ty2;
             TunnelXY(param1, ctx->tunnelShape, &tx1, &ty1);
@@ -743,6 +743,16 @@ void MainLoop(void* arg) {
             Project(p2, w, h, &x2, &y2);
             Project(p3, w, h, &x3, &y3);
             Project(p4, w, h, &x4, &y4);
+
+            SDL_SetRenderDrawColor(ctx->renderer, 200, 0, 0, 180);
+            SDL_RenderLine(ctx->renderer, x1 - 1.0f, y1, x3 - 1.0f, y3);
+            SDL_RenderLine(ctx->renderer, x1 + 1.0f, y1, x3 + 1.0f, y3);
+            SDL_RenderLine(ctx->renderer, x1, y1 - 1.0f, x3, y3 - 1.0f);
+            SDL_RenderLine(ctx->renderer, x1, y1 + 1.0f, x3, y3 + 1.0f);
+            SDL_RenderLine(ctx->renderer, x2 - 1.0f, y2, x4 - 1.0f, y4);
+            SDL_RenderLine(ctx->renderer, x2 + 1.0f, y2, x4 + 1.0f, y4);
+            SDL_RenderLine(ctx->renderer, x2, y2 - 1.0f, x4, y4 - 1.0f);
+            SDL_RenderLine(ctx->renderer, x2, y2 + 1.0f, x4, y4 + 1.0f);
 
             SDL_SetRenderDrawColor(ctx->renderer, 255, 0, 0, 255);
             SDL_RenderLine(ctx->renderer, x1, y1, x3, y3);
