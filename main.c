@@ -8,6 +8,22 @@
 #include <stdlib.h>
 #include <time.h>
 
+#define NUM_SOUND_SLOTS 4
+
+typedef struct {
+    float phase;
+    float freq;
+    float duration;
+    float volume;
+    int type;
+    bool active;
+} SoundEffect;
+
+typedef struct {
+    SDL_AudioStream* stream;
+    SoundEffect sounds[NUM_SOUND_SLOTS];
+} AudioContext;
+
 #define NUM_SIDES 16
 #define NUM_RINGS 8
 #define RING_DISTANCE 1.5f
@@ -35,6 +51,7 @@ typedef struct {
 typedef struct {
     SDL_Window* window;
     SDL_Renderer* renderer;
+    AudioContext audio;
     bool running;
     int playerSegment; 
     float tunnelOffset; 
@@ -47,6 +64,63 @@ typedef struct {
     int flashTimer;
     int score;
 } AppContext;
+
+void AudioCallback(void* userdata, SDL_AudioStream* stream, int len, int freq) {
+    AudioContext* ctx = (AudioContext*)userdata;
+    float* buf = SDL_malloc(len);
+    SDL_AudioSpec spec;
+    SDL_GetAudioStreamFormat(stream, NULL, &spec);
+    
+    for (int i = 0; i < len / (int)sizeof(float); i++) {
+        float sample = 0.0f;
+        for (int s = 0; s < NUM_SOUND_SLOTS; s++) {
+            if (ctx->sounds[s].active) {
+                float t = ctx->sounds[s].phase;
+                float v = ctx->sounds[s].volume;
+                
+                if (ctx->sounds[s].type == 0) {
+                    sample += sinf(t * ctx->sounds[s].freq * 2.0f * M_PI) * v;
+                } else if (ctx->sounds[s].type == 1) {
+                    float env = 1.0f - (t / ctx->sounds[s].duration);
+                    sample += (sinf(t * ctx->sounds[s].freq * 2.0f * M_PI * 2.0f) * 0.5f + 
+                              sinf(t * ctx->sounds[s].freq * 2.0f * M_PI * 1.5f) * 0.3f +
+                              sinf(t * ctx->sounds[s].freq * 2.0f * M_PI * 1.0f) * 0.2f) * v * env;
+                } else if (ctx->sounds[s].type == 2) {
+                    float env = 1.0f - (t / ctx->sounds[s].duration);
+                    sample += ((ctx->sounds[s].phase < 0.5f ? 1.0f : -1.0f) * 0.3f) * v * env;
+                } else {
+                    sample += sinf(t * ctx->sounds[s].freq * 2.0f * M_PI) * v;
+                }
+                
+                ctx->sounds[s].phase += 1.0f / freq;
+                if (ctx->sounds[s].phase >= ctx->sounds[s].duration) {
+                    ctx->sounds[s].active = false;
+                }
+            }
+        }
+        
+        if (sample > 1.0f) sample = 1.0f;
+        if (sample < -1.0f) sample = -1.0f;
+        buf[i] = sample;
+    }
+    
+    SDL_PutAudioStreamData(stream, buf, len);
+    SDL_free(buf);
+}
+
+void PlaySound(AudioContext* ctx, int type, float freq, float duration, float volume) {
+    for (int i = 0; i < NUM_SOUND_SLOTS; i++) {
+        if (!ctx->sounds[i].active) {
+            ctx->sounds[i].type = type;
+            ctx->sounds[i].freq = freq;
+            ctx->sounds[i].duration = duration;
+            ctx->sounds[i].volume = volume;
+            ctx->sounds[i].phase = 0.0f;
+            ctx->sounds[i].active = true;
+            return;
+        }
+    }
+}
 
 void Project(Point3D p, int width, int height, float* sx, float* sy) {
     float z_val = p.z;
@@ -187,14 +261,16 @@ void MainLoop(void* arg) {
                         ctx->shots[i].active = true;
                         ctx->shots[i].z = 2.0f;
                         ctx->shots[i].segment = ctx->playerSegment;
+                        PlaySound(&ctx->audio, 0, 880.0f, 0.08f, 0.3f);
                         break;
                     }
                 }
             }
             if (event.key.scancode == SDL_SCANCODE_Z && !ctx->superzapperUsed) {
                 ctx->superzapperUsed = true;
-                ctx->flashTimer = 10; // 10 frames of flash
+                ctx->flashTimer = 10;
                 for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
+                PlaySound(&ctx->audio, 1, 220.0f, 0.5f, 0.5f);
             }
         }
     }
@@ -232,20 +308,23 @@ void MainLoop(void* arg) {
             if (ctx->enemies[i].active) {
                 ctx->enemies[i].z -= 0.05f;
                 if (ctx->enemies[i].z < 2.0f) {
-                    ctx->enemies[i].active = false; // Reached the rim
+                    ctx->enemies[i].active = false;
                     ctx->lives--;
-                    if (ctx->lives <= 0) ctx->gameOver = true;
+                    PlaySound(&ctx->audio, 2, 110.0f, 0.3f, 0.4f);
+                    if (ctx->lives <= 0) {
+                        ctx->gameOver = true;
+                        PlaySound(&ctx->audio, 2, 55.0f, 1.0f, 0.5f);
+                    }
                 }
 
-                // Check collision with shots
                 for (int j = 0; j < MAX_SHOTS; j++) {
                     if (ctx->shots[j].active && ctx->shots[j].segment == ctx->enemies[i].segment) {
                         if (fabsf(ctx->shots[j].z - ctx->enemies[i].z) < 1.0f) {
                             ctx->shots[j].active = false;
                             ctx->enemies[i].active = false;
                             ctx->score += 100;
+                            PlaySound(&ctx->audio, 0, 660.0f, 0.1f, 0.25f);
                             break;
-
                         }
                     }
                 }
@@ -346,10 +425,18 @@ void MainLoop(void* arg) {
 
 int main(int argc, char* argv[]) {
     srand((unsigned int)time(NULL));
-    if (!SDL_Init(SDL_INIT_VIDEO)) return 1;
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) return 1;
     AppContext ctx = {0};
     ctx.window = SDL_CreateWindow("Tempest SDL3", 800, 800, 0);
     ctx.renderer = SDL_CreateRenderer(ctx.window, NULL);
+    
+    SDL_AudioSpec spec = {SDL_AUDIO_F32, 1, 48000};
+    SDL_AudioDeviceID dev = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec);
+    if (dev != 0) {
+        ctx.audio.stream = SDL_OpenAudioDeviceStream(dev, &spec, &AudioCallback, &ctx.audio);
+        if (ctx.audio.stream) SDL_ResumeAudioDevice(dev);
+    }
+    
     ctx.running = true;
     ResetGame(&ctx);
 
@@ -361,6 +448,8 @@ int main(int argc, char* argv[]) {
         SDL_Delay(16);
     }
 #endif
+    if (ctx.audio.stream) SDL_DestroyAudioStream(ctx.audio.stream);
+    if (dev != 0) SDL_CloseAudioDevice(dev);
     SDL_Quit();
     return 0;
 }
