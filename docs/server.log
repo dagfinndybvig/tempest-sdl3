@@ -1,0 +1,21 @@
+127.0.0.1 - - [16/Mar/2026 15:30:37] "GET /index.html HTTP/1.1" 200 -
+127.0.0.1 - - [16/Mar/2026 15:30:49] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [16/Mar/2026 15:30:49] "GET /index.js HTTP/1.1" 200 -
+127.0.0.1 - - [16/Mar/2026 15:30:49] "GET /index.data HTTP/1.1" 200 -
+127.0.0.1 - - [16/Mar/2026 15:30:49] "GET /index.wasm HTTP/1.1" 200 -
+127.0.0.1 - - [16/Mar/2026 15:30:49] code 404, message File not found
+127.0.0.1 - - [16/Mar/2026 15:30:49] "GET /favicon.ico HTTP/1.1" 404 -
+127.0.0.1 - - [16/Mar/2026 15:30:51] code 404, message File not found
+127.0.0.1 - - [16/Mar/2026 15:30:51] "GET /favicon.ico HTTP/1.1" 404 -
+127.0.0.1 - - [16/Mar/2026 15:32:38] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [16/Mar/2026 15:32:38] "GET /index.js HTTP/1.1" 200 -
+127.0.0.1 - - [16/Mar/2026 15:32:38] "GET /index.data HTTP/1.1" 200 -
+127.0.0.1 - - [16/Mar/2026 15:32:38] "GET /index.wasm HTTP/1.1" 200 -
+127.0.0.1 - - [16/Mar/2026 15:32:40] code 404, message File not found
+127.0.0.1 - - [16/Mar/2026 15:32:40] "GET /favicon.ico HTTP/1.1" 404 -
+127.0.0.1 - - [16/Mar/2026 15:33:08] "GET / HTTP/1.1" 304 -
+127.0.0.1 - - [16/Mar/2026 15:33:08] "GET /index.js HTTP/1.1" 200 -
+127.0.0.1 - - [16/Mar/2026 15:33:08] "GET /index.data HTTP/1.1" 304 -
+127.0.0.1 - - [16/Mar/2026 15:33:08] "GET /index.wasm HTTP/1.1" 304 -
+127.0.0.1 - - [16/Mar/2026 15:33:10] code 404, message File not found
+127.0.0.1 - - [16/Mar/2026 15:33:10] "GET /favicon.ico HTTP/1.1" 404 -
