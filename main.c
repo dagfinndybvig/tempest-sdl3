@@ -41,6 +41,8 @@ typedef struct {
     Shot shots[MAX_SHOTS];
     Enemy enemies[MAX_ENEMIES];
     Uint64 lastSpawnTime;
+    int lives;
+    bool gameOver;
 } AppContext;
 
 void Project(Point3D p, int width, int height, float* sx, float* sy) {
@@ -90,6 +92,14 @@ void DrawBlaster(AppContext* ctx, int w, int h) {
     SDL_SetRenderDrawBlendMode(ctx->renderer, SDL_BLENDMODE_BLEND);
 }
 
+void ResetGame(AppContext* ctx) {
+    ctx->lives = 3;
+    ctx->gameOver = false;
+    ctx->playerSegment = 0;
+    for(int i=0; i<MAX_SHOTS; i++) ctx->shots[i].active = false;
+    for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
+}
+
 void MainLoop(void* arg) {
     AppContext* ctx = (AppContext*)arg;
     SDL_Event event;
@@ -104,6 +114,10 @@ void MainLoop(void* arg) {
 #endif
         }
         if (event.type == SDL_EVENT_KEY_DOWN) {
+            if (ctx->gameOver) {
+                if (event.key.scancode == SDL_SCANCODE_R) ResetGame(ctx);
+                continue;
+            }
             if (event.key.scancode == SDL_SCANCODE_LEFT) ctx->playerSegment = (ctx->playerSegment - 1 + NUM_SIDES) % NUM_SIDES;
             if (event.key.scancode == SDL_SCANCODE_RIGHT) ctx->playerSegment = (ctx->playerSegment + 1) % NUM_SIDES;
             if (event.key.scancode == SDL_SCANCODE_SPACE) {
@@ -119,54 +133,62 @@ void MainLoop(void* arg) {
         }
     }
 
-    // Move forward
-    ctx->tunnelOffset += 0.02f;
-    if (ctx->tunnelOffset >= RING_DISTANCE) ctx->tunnelOffset -= RING_DISTANCE;
+    if (!ctx->gameOver) {
+        // Move forward
+        ctx->tunnelOffset += 0.02f;
+        if (ctx->tunnelOffset >= RING_DISTANCE) ctx->tunnelOffset -= RING_DISTANCE;
 
-    // Update shots
-    for(int i=0; i<MAX_SHOTS; i++) {
-        if(ctx->shots[i].active) {
-            ctx->shots[i].z += 0.5f;
-            if(ctx->shots[i].z > NUM_RINGS * RING_DISTANCE) ctx->shots[i].active = false;
+        // Update shots
+        for(int i=0; i<MAX_SHOTS; i++) {
+            if(ctx->shots[i].active) {
+                ctx->shots[i].z += 0.5f;
+                if(ctx->shots[i].z > NUM_RINGS * RING_DISTANCE) ctx->shots[i].active = false;
+            }
         }
-    }
 
-    // Spawn enemies
-    Uint64 now = SDL_GetTicks();
-    if (now - ctx->lastSpawnTime > 2000) { // Every 2 seconds
+        // Spawn enemies
+        Uint64 now = SDL_GetTicks();
+        if (now - ctx->lastSpawnTime > 2000) { // Every 2 seconds
+            for (int i = 0; i < MAX_ENEMIES; i++) {
+                if (!ctx->enemies[i].active) {
+                    ctx->enemies[i].active = true;
+                    ctx->enemies[i].z = NUM_RINGS * RING_DISTANCE;
+                    ctx->enemies[i].segment = rand() % NUM_SIDES;
+                    ctx->lastSpawnTime = now;
+                    break;
+                }
+            }
+        }
+
+        // Update enemies and collision
         for (int i = 0; i < MAX_ENEMIES; i++) {
-            if (!ctx->enemies[i].active) {
-                ctx->enemies[i].active = true;
-                ctx->enemies[i].z = NUM_RINGS * RING_DISTANCE;
-                ctx->enemies[i].segment = rand() % NUM_SIDES;
-                ctx->lastSpawnTime = now;
-                break;
-            }
-        }
-    }
+            if (ctx->enemies[i].active) {
+                ctx->enemies[i].z -= 0.05f;
+                if (ctx->enemies[i].z < 2.0f) {
+                    ctx->enemies[i].active = false; // Reached the rim
+                    ctx->lives--;
+                    if (ctx->lives <= 0) ctx->gameOver = true;
+                }
 
-    // Update enemies and collision
-    for (int i = 0; i < MAX_ENEMIES; i++) {
-        if (ctx->enemies[i].active) {
-            ctx->enemies[i].z -= 0.05f;
-            if (ctx->enemies[i].z < 2.0f) {
-                ctx->enemies[i].active = false; // Reached the rim
-            }
-
-            // Check collision with shots
-            for (int j = 0; j < MAX_SHOTS; j++) {
-                if (ctx->shots[j].active && ctx->shots[j].segment == ctx->enemies[i].segment) {
-                    if (fabsf(ctx->shots[j].z - ctx->enemies[i].z) < 1.0f) {
-                        ctx->shots[j].active = false;
-                        ctx->enemies[i].active = false;
-                        break;
+                // Check collision with shots
+                for (int j = 0; j < MAX_SHOTS; j++) {
+                    if (ctx->shots[j].active && ctx->shots[j].segment == ctx->enemies[i].segment) {
+                        if (fabsf(ctx->shots[j].z - ctx->enemies[i].z) < 1.0f) {
+                            ctx->shots[j].active = false;
+                            ctx->enemies[i].active = false;
+                            break;
+                        }
                     }
                 }
             }
         }
     }
 
-    SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 10, 255);
+    if (ctx->gameOver) {
+        SDL_SetRenderDrawColor(ctx->renderer, 50, 0, 0, 255); // Dark red background
+    } else {
+        SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 10, 255);
+    }
     SDL_RenderClear(ctx->renderer);
 
     // Draw Tunnel
@@ -257,6 +279,7 @@ int main(int argc, char* argv[]) {
     ctx.window = SDL_CreateWindow("Tempest SDL3", 800, 800, 0);
     ctx.renderer = SDL_CreateRenderer(ctx.window, NULL);
     ctx.running = true;
+    ResetGame(&ctx);
 
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop_arg(MainLoop, &ctx, 0, 1);
