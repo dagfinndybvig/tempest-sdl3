@@ -104,6 +104,26 @@ void ResetGame(AppContext* ctx) {
     for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
 }
 
+void DrawHUD(AppContext* ctx, int w, int h) {
+    SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 0, 255);
+    for (int i = 0; i < ctx->lives; i++) {
+        float x = 20.0f + i * 30.0f;
+        float y = 20.0f;
+        float size = 10.0f;
+        // Draw a small "U" shape
+        SDL_RenderLine(ctx->renderer, x, y, x, y + size);
+        SDL_RenderLine(ctx->renderer, x, y + size, x + size, y + size);
+        SDL_RenderLine(ctx->renderer, x + size, y + size, x + size, y);
+    }
+    
+    // If superzapper is available, draw a small indicator
+    if (!ctx->superzapperUsed) {
+        SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 255);
+        SDL_RenderLine(ctx->renderer, 20, 45, 30, 45);
+        SDL_RenderLine(ctx->renderer, 25, 40, 25, 50); // Small "+"
+    }
+}
+
 void MainLoop(void* arg) {
     AppContext* ctx = (AppContext*)arg;
     SDL_Event event;
@@ -280,6 +300,7 @@ void MainLoop(void* arg) {
     SDL_SetRenderDrawBlendMode(ctx->renderer, SDL_BLENDMODE_BLEND);
 
     DrawBlaster(ctx, w, h);
+    DrawHUD(ctx, w, h);
 
     SDL_RenderPresent(ctx->renderer);
 }
