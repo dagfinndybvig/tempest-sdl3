@@ -332,8 +332,8 @@ static void DrawGameOverPrompt(AppContext* ctx, int w, int h) {
     SDL_SetRenderDrawColor(ctx->renderer, 57, 255, 20, 255); // Intense Neon Green
     DrawGlyphString(ctx->renderer, scoreStr, ((float)w - scoreWidth) * 0.5f, h * 0.45f, scoreSize, scoreSpacing);
 
-    // Bottom: PRESS ANY KEY
-    const char* prompt = "PRESS ANY KEY";
+    // Bottom: PRESS UP TO RESTART
+    const char* prompt = "PRESS UP TO RESTART";
     float promptSize = 24.0f;
     float promptSpacing = promptSize * 0.25f;
     float promptWidth = MeasureGlyphStringWidth(prompt, promptSize, promptSpacing);
@@ -776,19 +776,19 @@ void MainLoop(void* arg) {
                 continue;
             }
             if (ctx->state == STATE_GAMEOVER) {
-                fprintf(stderr, "DEBUG: Key pressed during gameOver. scancode=%d, key=%d, repeat=%d\n", event.key.scancode, event.key.key, event.key.repeat);
                 // Try to restart with a specific shape (0-3 keys)
                 if (RestartWithShape(ctx, event.key.scancode, event.key.key, event.key.repeat)) {
-                    fprintf(stderr, "DEBUG: RestartWithShape returned true\n");
                     ctx->state = STATE_PLAYING;
                     continue;
                 }
-                // Any other key: restart with the already-selected random geometry
-                fprintf(stderr, "DEBUG: Calling ContinueGameWithSelectedGeometry, selectedTunnelShape=%d\n", ctx->selectedTunnelShape);
-                ContinueGameWithSelectedGeometry(ctx);
-                ctx->state = STATE_PLAYING;
-                fprintf(stderr, "DEBUG: After continue, gameOver=%d, selectedTunnelShape=%d, tunnelShape=%d\n", ctx->gameOver, ctx->selectedTunnelShape, ctx->tunnelShape);
-                continue;
+                
+                // Only Arrow Up restarts with current random geometry
+                if (event.key.scancode == SDL_SCANCODE_UP) {
+                    ContinueGameWithSelectedGeometry(ctx);
+                    ctx->state = STATE_PLAYING;
+                    continue;
+                }
+                continue; // Ignore other keys
             }
             if (event.key.scancode == SDL_SCANCODE_LEFT) ctx->playerSegment = (ctx->playerSegment - 1 + NUM_SIDES) % NUM_SIDES;
             if (event.key.scancode == SDL_SCANCODE_RIGHT) ctx->playerSegment = (ctx->playerSegment + 1) % NUM_SIDES;
