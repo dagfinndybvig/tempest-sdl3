@@ -120,6 +120,7 @@ typedef struct {
     int score;
     TunnelShape tunnelShape;
     TunnelShape selectedTunnelShape;
+    int enemiesDestroyedCount;
 } AppContext;
 
 typedef struct {
@@ -668,6 +669,7 @@ void ResetGame(AppContext* ctx) {
     ctx->playerSegment = 0;
     ctx->remainingInBurst = 0;
     ctx->nextBurstTime = SDL_GetTicks() + 10000 + (rand() % 20000); // 20s +/- 10s
+    ctx->enemiesDestroyedCount = 0;
     ApplyTunnelShape(ctx, ctx->selectedTunnelShape);
     for(int i=0; i<MAX_SHOTS; i++) ctx->shots[i].active = false;
     for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
@@ -899,7 +901,24 @@ void MainLoop(void* arg) {
                         ctx->shots[j].active = false;
                         ctx->enemies[i].active = false;
                         ctx->score += 100;
+                        ctx->enemiesDestroyedCount++;
                         PlayWav(&ctx->audio, WAV_COIN, false);
+                        
+                        // Check if we should change geometry
+                        if (ctx->enemiesDestroyedCount >= 8) {
+                            TunnelShape newShape;
+                            do {
+                                newShape = (TunnelShape)(rand() % 4);
+                            } while (newShape == ctx->tunnelShape); // Ensure different geometry
+                            
+                            ctx->selectedTunnelShape = newShape;
+                            ApplyTunnelShape(ctx, newShape);
+                            ctx->enemiesDestroyedCount = 0; // Reset counter
+                            
+                            // Visual feedback - flash
+                            ctx->flashTimer = 5;
+                            PlayWav(&ctx->audio, WAV_PERCUSSION, false);
+                        }
                         break;
                     }
                 }
