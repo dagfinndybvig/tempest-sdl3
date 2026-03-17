@@ -289,7 +289,7 @@ static const Glyph* GetGlyphByChar(char ch) {
     ch = (char)toupper((unsigned char)ch);
     for (size_t i = 0; i < sizeof(glyphs) / sizeof(glyphs[0]); i++) {
         if (glyphs[i].ch == ch) return &glyphs[i];
-    }
+   }
     return NULL;
 }
 
@@ -915,7 +915,7 @@ void MainLoop(void* arg) {
                 // Delay the first shot spawning by 500ms
                 ctx->nextBurstShotTime = now + 500;
                 // Schedule next burst (20 +/- 10s)
-                ctx->nextBurstTime = now + 10000 + (rand() % 20000);
+                ctx->nextBurstTime = now + 2500 + (rand() % 2000);
             }
         } else {
             if (now >= ctx->nextBurstShotTime) {
