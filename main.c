@@ -759,6 +759,16 @@ void DrawHUD(AppContext* ctx, int w, int h) {
 
 void MainLoop(void* arg) {
     AppContext* ctx = (AppContext*)arg;
+
+    // Fixed 60 FPS logic
+    static Uint64 lastFrameTime = 0;
+    Uint64 now = SDL_GetTicks();
+    if (lastFrameTime == 0) lastFrameTime = now;
+    
+    Uint64 elapsed = now - lastFrameTime;
+    if (elapsed < 16) return; // Skip if less than ~16.6ms passed
+    lastFrameTime = now;
+
     SDL_Event event;
     int w, h;
     SDL_GetWindowSize(ctx->window, &w, &h);
@@ -1172,7 +1182,7 @@ int main(int argc, char* argv[]) {
 #else
     while (ctx.running) {
         MainLoop(&ctx);
-        SDL_Delay(16);
+        SDL_Delay(1); // Minimal delay to prevent 100% CPU usage
     }
 #endif
     if (ctx.audio.stream) SDL_DestroyAudioStream(ctx.audio.stream);
