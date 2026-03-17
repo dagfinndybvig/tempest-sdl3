@@ -1,3 +1,6 @@
+<img width="800" height="669" alt="image" src="https://github.com/user-attachments/assets/af5e248b-26de-442b-8a52-4154baf800f2" />
+
+
 # Tempest SDL3 Prototype
 
 An experimental 3D vector-style engine built with C and SDL3, compiled to WebAssembly via Emscripten.
