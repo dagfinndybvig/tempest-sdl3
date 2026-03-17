@@ -1,4 +1,5 @@
-<img width="805" height="631" alt="image" src="https://github.com/user-attachments/assets/0ef76aba-d457-4bb0-b6d7-a3ca9ccb509e" />
+<img width="798" height="663" alt="image" src="https://github.com/user-attachments/assets/de9f8506-c2b0-471f-9f4b-1974c0c3805b" />
+
 
 
 # Tempest SDL3 Prototype
