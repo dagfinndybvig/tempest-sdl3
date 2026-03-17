@@ -1,4 +1,6 @@
-# Bug: Game Over Geometry Always Reverts to Geometry 1
+# [FIXED] Bug: Game Over Geometry Always Reverts to Geometry 1
+
+**Note: This bug has been fixed.**
 
 ## Problem Description
 

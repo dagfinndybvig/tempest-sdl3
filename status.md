@@ -66,7 +66,7 @@ For explosions when enemies are hit, implement a simple particle system:
 
 ## 📅 Roadmap / TODO
 - [x] Implement player health/lives and "Game Over" state.
-- [ ] Add sound effects using SDL_Audio.
+- [x] Implement sound effects using SDL_Audio.
 - [x] Implement different tunnel shapes (square, "flat" open tracks).
 - [x] Add geometry 0 (irregular circle) with ±25% angle jitter.
 - [x] Add variable, tilted "flat" tunnel geometry with random wobble.

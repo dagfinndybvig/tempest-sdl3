@@ -23,13 +23,33 @@ typedef struct {
     bool active;
 } SoundEffect;
 
+typedef enum {
+    WAV_LASERZAP = 0,
+    WAV_EXPLOSION = 1,
+    WAV_PERCUSSION = 2,
+    WAV_COIN = 3,
+    NUM_WAVS = 4
+} WavType;
+
+typedef struct {
+    float* data;
+    Uint32 len;
+} WavBuffer;
+
+typedef struct {
+    int wavIndex;
+    Uint32 pos;
+    bool active;
+    bool loop;
+} ActiveSound;
+
+#define MAX_ACTIVE_SOUNDS 16
+
 typedef struct {
     SDL_AudioStream* stream;
     SoundEffect sounds[NUM_SOUND_SLOTS];
-    Uint8* wavData;
-    Uint32 wavLen;
-    Uint32 wavPos;
-    bool wavActive;
+    WavBuffer wavs[NUM_WAVS];
+    ActiveSound activeSounds[MAX_ACTIVE_SOUNDS];
 } AudioContext;
 
 #define NUM_SIDES 16
@@ -257,62 +277,72 @@ static void TriggerGameOverShape(AppContext* ctx) {
 
 void AudioCallback(void* userdata, SDL_AudioStream* stream, int len, int freq) {
     AudioContext* ctx = (AudioContext*)userdata;
-    float* buf = SDL_malloc(len);
-    int samples = len / (int)sizeof(float);
+    int numSamples = len / (int)sizeof(float);
+    float* buf = (float*)SDL_malloc(len);
+    if (!buf) return;
+    SDL_memset(buf, 0, len);
 
-    for (int i = 0; i < samples; i++) {
-        float sample = 0.0f;
+    for (int i = 0; i < numSamples; i++) {
+        float mixed = 0.0f;
 
-        /* Play WAV only when explicitly activated */
-        if (ctx->wavData && ctx->wavLen > 0 && ctx->wavActive) {
-            if (ctx->wavPos + 1 < ctx->wavLen) {
-                int16_t s16 = (int16_t)((ctx->wavData[ctx->wavPos + 1] << 8) | ctx->wavData[ctx->wavPos]);
-                sample += s16 / 32768.0f;
-                ctx->wavPos += 2;
-            } else {
-                /* Reached end of the WAV buffer: stop playback */
-                ctx->wavActive = false;
-                ctx->wavPos = 0;
+        // Mix WAVs
+        for (int s = 0; s < MAX_ACTIVE_SOUNDS; s++) {
+            ActiveSound* as = &ctx->activeSounds[s];
+            if (as->active) {
+                WavBuffer* wb = &ctx->wavs[as->wavIndex];
+                if (wb->data && wb->len > 0) {
+                    mixed += wb->data[as->pos];
+                    as->pos++;
+                    if (as->pos >= wb->len) {
+                        if (as->loop) {
+                            as->pos = 0;
+                        } else {
+                            as->active = false;
+                        }
+                    }
+                }
             }
         }
 
-        /* Mix in procedural sounds */
+        // Mix in procedural sounds
         for (int s = 0; s < NUM_SOUND_SLOTS; s++) {
             if (ctx->sounds[s].active) {
                 float t = ctx->sounds[s].phase;
                 float progress = t / ctx->sounds[s].duration;
                 float currentFreq = ctx->sounds[s].freqStart + (ctx->sounds[s].freqEnd - ctx->sounds[s].freqStart) * progress;
                 float v = ctx->sounds[s].volume;
+                float sample = 0.0f;
 
                 if (ctx->sounds[s].type == 0) {
                     float env = expf(-t * 15.0f);
-                    sample += sinf(t * currentFreq * 2.0f * M_PI) * v * env;
+                    sample = sinf(t * currentFreq * 2.0f * (float)M_PI) * v * env;
                 } else if (ctx->sounds[s].type == 1) {
                     float env = expf(-t * 5.0f);
-                    float mod = sinf(t * 15.0f * 2.0f * M_PI);
-                    sample += (sinf(t * currentFreq * 2.0f * M_PI) + mod * 0.3f) * v * env;
+                    float mod = sinf(t * 15.0f * 2.0f * (float)M_PI);
+                    sample = (sinf(t * currentFreq * 2.0f * (float)M_PI) + mod * 0.3f) * v * env;
                 } else if (ctx->sounds[s].type == 2) {
                     float env = expf(-t * 8.0f);
                     float noise = ((float)(rand() % 100) / 100.0f - 0.5f) * 2.0f;
-                    sample += noise * v * env;
+                    sample = noise * v * env;
                 } else if (ctx->sounds[s].type == 3) {
                     float env = 1.0f - progress;
-                    float mod = sinf(t * 8.0f * 2.0f * M_PI);
-                    sample += (sinf(t * currentFreq * 2.0f * M_PI) + mod * 0.5f) * v * env;
+                    float mod = sinf(t * 8.0f * 2.0f * (float)M_PI);
+                    sample = (sinf(t * currentFreq * 2.0f * (float)M_PI) + mod * 0.5f) * v * env;
                 } else {
-                    sample += sinf(t * currentFreq * 2.0f * M_PI) * v;
+                    sample = sinf(t * currentFreq * 2.0f * (float)M_PI) * v;
                 }
+                mixed += sample;
 
-                ctx->sounds[s].phase += 1.0f / freq;
+                ctx->sounds[s].phase += 1.0f / (float)freq;
                 if (ctx->sounds[s].phase >= ctx->sounds[s].duration) {
                     ctx->sounds[s].active = false;
                 }
             }
         }
 
-        if (sample > 1.0f) sample = 1.0f;
-        if (sample < -1.0f) sample = -1.0f;
-        buf[i] = sample;
+        if (mixed > 1.0f) mixed = 1.0f;
+        if (mixed < -1.0f) mixed = -1.0f;
+        buf[i] = mixed;
     }
 
     SDL_PutAudioStreamData(stream, buf, len);
@@ -320,14 +350,41 @@ void AudioCallback(void* userdata, SDL_AudioStream* stream, int len, int freq) {
 }
 
 void PlaySound(AudioContext* ctx, int type, float freqStart, float freqEnd, float duration, float volume) {
-    (void)ctx; (void)type; (void)freqStart; (void)freqEnd; (void)duration; (void)volume;
-    /* Procedural sounds disabled: only laserzap.wav (PlayWav) will produce audio. */
-    return;
+    for (int s = 0; s < NUM_SOUND_SLOTS; s++) {
+        if (!ctx->sounds[s].active) {
+            ctx->sounds[s].type = type;
+            ctx->sounds[s].freqStart = freqStart;
+            ctx->sounds[s].freqEnd = freqEnd;
+            ctx->sounds[s].duration = duration;
+            ctx->sounds[s].volume = volume;
+            ctx->sounds[s].phase = 0.0f;
+            ctx->sounds[s].active = true;
+            return;
+        }
+    }
 }
 
-void PlayWav(AudioContext* ctx) {
-    ctx->wavPos = 0;
-    ctx->wavActive = true;
+void PlayWav(AudioContext* ctx, WavType type, bool loop) {
+    if (type >= NUM_WAVS) return;
+    if (ctx->wavs[type].data == NULL) return;
+
+    if (loop) {
+        for (int i = 0; i < MAX_ACTIVE_SOUNDS; i++) {
+            if (ctx->activeSounds[i].active && ctx->activeSounds[i].wavIndex == (int)type) {
+                return;
+            }
+        }
+    }
+
+    for (int i = 0; i < MAX_ACTIVE_SOUNDS; i++) {
+        if (!ctx->activeSounds[i].active) {
+            ctx->activeSounds[i].wavIndex = (int)type;
+            ctx->activeSounds[i].pos = 0;
+            ctx->activeSounds[i].loop = loop;
+            ctx->activeSounds[i].active = true;
+            return;
+        }
+    }
 }
 
 void Project(Point3D p, int width, int height, float* sx, float* sy) {
@@ -585,7 +642,7 @@ void MainLoop(void* arg) {
                         ctx->shots[i].active = true;
                         ctx->shots[i].z = 2.0f;
                         ctx->shots[i].segment = ctx->playerSegment;
-                        PlayWav(&ctx->audio);
+                        PlayWav(&ctx->audio, WAV_LASERZAP, false);
                         break;
                     }
                 }
@@ -594,7 +651,7 @@ void MainLoop(void* arg) {
                 ctx->superzapperUsed = true;
                 ctx->flashTimer = 10;
                 for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
-                PlaySound(&ctx->audio, 1, 100.0f, 800.0f, 0.4f, 0.5f);
+                PlayWav(&ctx->audio, WAV_EXPLOSION, false);
             }
         }
     }
@@ -647,7 +704,7 @@ void MainLoop(void* arg) {
                         ctx->shots[j].active = false;
                         ctx->enemies[i].active = false;
                         ctx->score += 100;
-                        PlaySound(&ctx->audio, 0, 800.0f, 150.0f, 0.12f, 0.35f);
+                        PlayWav(&ctx->audio, WAV_COIN, false);
                         break;
                     }
                 }
@@ -770,6 +827,56 @@ void MainLoop(void* arg) {
     SDL_RenderPresent(ctx->renderer);
 }
 
+static bool LoadAndConvertWAV(const char* filename, const SDL_AudioSpec* targetSpec, WavBuffer* out) {
+    SDL_AudioSpec srcSpec;
+    Uint8* srcData;
+    Uint32 srcLen;
+    if (!SDL_LoadWAV(filename, &srcSpec, &srcData, &srcLen)) {
+        fprintf(stderr, "Failed to load %s: %s\n", filename, SDL_GetError());
+        return false;
+    }
+
+    // Use SDL_AudioStream for conversion as it's more reliable in some SDL3 versions
+    SDL_AudioStream* stream = SDL_CreateAudioStream(&srcSpec, targetSpec);
+    if (!stream) {
+        fprintf(stderr, "Failed to create conversion stream for %s: %s\n", filename, SDL_GetError());
+        SDL_free(srcData);
+        return false;
+    }
+
+    if (!SDL_PutAudioStreamData(stream, srcData, srcLen)) {
+        fprintf(stderr, "Failed to put data into conversion stream for %s: %s\n", filename, SDL_GetError());
+        SDL_DestroyAudioStream(stream);
+        SDL_free(srcData);
+        return false;
+    }
+
+    if (!SDL_FlushAudioStream(stream)) {
+        fprintf(stderr, "Failed to flush conversion stream for %s: %s\n", filename, SDL_GetError());
+        SDL_DestroyAudioStream(stream);
+        SDL_free(srcData);
+        return false;
+    }
+
+    int available = SDL_GetAudioStreamAvailable(stream);
+    if (available > 0) {
+        out->data = (float*)SDL_malloc(available);
+        if (out->data) {
+            int got = SDL_GetAudioStreamData(stream, out->data, available);
+            out->len = (Uint32)(got / sizeof(float));
+            fprintf(stderr, "Loaded and converted %s: %u samples (%d bytes)\n", filename, out->len, got);
+            SDL_DestroyAudioStream(stream);
+            SDL_free(srcData);
+            return true;
+        }
+    }
+
+    fprintf(stderr, "Conversion of %s yielded no data: %s\n", filename, SDL_GetError());
+    SDL_DestroyAudioStream(stream);
+    SDL_free(srcData);
+    return false;
+}
+
 int main(int argc, char* argv[]) {
     srand((unsigned int)time(NULL));
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) return 1;
@@ -778,14 +885,16 @@ int main(int argc, char* argv[]) {
     ctx.window = SDL_CreateWindow("Tempest SDL3", 800, 800, 0);
     ctx.renderer = SDL_CreateRenderer(ctx.window, NULL);
     
-    SDL_AudioSpec wavSpec;
-    if (SDL_LoadWAV("laserzap.wav", &wavSpec, &ctx.audio.wavData, &ctx.audio.wavLen)) {
-        fprintf(stderr, "Loaded laserzap.wav: %u bytes\n", ctx.audio.wavLen);
-    }
+    SDL_AudioSpec targetSpec = {SDL_AUDIO_F32, 1, 48000};
+    ctx.audio.stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &targetSpec, &AudioCallback, &ctx.audio);
     
-    SDL_AudioSpec spec = {SDL_AUDIO_F32, 1, 48000};
-    ctx.audio.stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, &AudioCallback, &ctx.audio);
     if (ctx.audio.stream) {
+        LoadAndConvertWAV("laserzap.wav", &targetSpec, &ctx.audio.wavs[WAV_LASERZAP]);
+        LoadAndConvertWAV("explosion.wav", &targetSpec, &ctx.audio.wavs[WAV_EXPLOSION]);
+        LoadAndConvertWAV("percussion.wav", &targetSpec, &ctx.audio.wavs[WAV_PERCUSSION]);
+        LoadAndConvertWAV("coin.wav", &targetSpec, &ctx.audio.wavs[WAV_COIN]);
+        
+        PlayWav(&ctx.audio, WAV_PERCUSSION, true);
         SDL_ResumeAudioStreamDevice(ctx.audio.stream);
     }
     
@@ -801,7 +910,9 @@ int main(int argc, char* argv[]) {
     }
 #endif
     if (ctx.audio.stream) SDL_DestroyAudioStream(ctx.audio.stream);
-    if (ctx.audio.wavData) SDL_free(ctx.audio.wavData);
+    for (int i = 0; i < NUM_WAVS; i++) {
+        if (ctx.audio.wavs[i].data) SDL_free(ctx.audio.wavs[i].data);
+    }
     SDL_Quit();
     return 0;
 }
