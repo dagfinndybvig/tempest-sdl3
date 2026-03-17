@@ -83,18 +83,25 @@ typedef enum {
     TUNNEL_FLAT = 3
 } TunnelShape;
 
+typedef enum {
+    STATE_LANDING,
+    STATE_PLAYING,
+    STATE_GAMEOVER
+} GameState;
+
 typedef struct {
     SDL_Window* window;
     SDL_Renderer* renderer;
     AudioContext audio;
     bool running;
+    GameState state;
     int playerSegment; 
     float tunnelOffset; 
     Shot shots[MAX_SHOTS];
     Enemy enemies[MAX_ENEMIES];
     Uint64 lastSpawnTime;
     int lives;
-    bool gameOver;
+    bool gameOver; // We can eventually remove this in favor of state, but keeping for now to minimize diff
     TunnelShape gameOverShape;
     bool superzapperUsed;
     int flashTimer;
@@ -365,104 +372,60 @@ static void SelectTunnelShape(AppContext* ctx, TunnelShape shape) {
     ApplyTunnelShape(ctx, shape);
 }
 
-static void TriggerGameOverShape(AppContext* ctx) {
-    if (ctx->gameOver) return;
-    ctx->gameOver = true;
-    TunnelShape randomShape = (TunnelShape)(rand() % 4);
-    ctx->gameOverShape = randomShape;
-    ctx->selectedTunnelShape = randomShape;
-    ApplyTunnelShape(ctx, randomShape);
-    fprintf(stderr, "DEBUG: GameOver triggered, gameOverShape=%d, selectedTunnelShape=%d, tunnelShape=%d\n", ctx->gameOverShape, ctx->selectedTunnelShape, ctx->tunnelShape);
-    PlaySound(&ctx->audio, 2, 100.0f, 50.0f, 0.5f, 0.7f);
-}
+static void DrawLandingPage(AppContext* ctx, int w, int h) {
+    // Top: TEMPEST
+    const char* title = "TEMPEST";
+    float titleSize = 96.0f;
+    float titleSpacing = titleSize * 0.2f;
+    float titleWidth = MeasureGlyphStringWidth(title, titleSize, titleSpacing);
+    SDL_SetRenderDrawColor(ctx->renderer, 255, 50, 50, 255);
+    DrawGlyphString(ctx->renderer, title, ((float)w - titleWidth) * 0.5f, h * 0.15f, titleSize, titleSpacing);
 
-void AudioCallback(void* userdata, SDL_AudioStream* stream, int len, int freq) {
-    AudioContext* ctx = (AudioContext*)userdata;
-    int numSamples = len / (int)sizeof(float);
-    float* buf = (float*)SDL_malloc(len);
-    if (!buf) return;
-    SDL_memset(buf, 0, len);
-
-    for (int i = 0; i < numSamples; i++) {
-        float mixed = 0.0f;
-
-        // Mix WAVs
-        for (int s = 0; s < MAX_ACTIVE_SOUNDS; s++) {
-            ActiveSound* as = &ctx->activeSounds[s];
-            if (as->active) {
-                WavBuffer* wb = &ctx->wavs[as->wavIndex];
-                if (wb->data && wb->len > 0) {
-                    mixed += wb->data[as->pos];
-                    as->pos++;
-                    if (as->pos >= wb->len) {
-                        if (as->loop) {
-                            as->pos = 0;
-                        } else {
-                            as->active = false;
-                        }
-                    }
-                }
-            }
-        }
-
-        // Mix in procedural sounds
-        for (int s = 0; s < NUM_SOUND_SLOTS; s++) {
-            if (ctx->sounds[s].active) {
-                float t = ctx->sounds[s].phase;
-                float progress = t / ctx->sounds[s].duration;
-                float currentFreq = ctx->sounds[s].freqStart + (ctx->sounds[s].freqEnd - ctx->sounds[s].freqStart) * progress;
-                float v = ctx->sounds[s].volume;
-                float sample = 0.0f;
-
-                if (ctx->sounds[s].type == 0) {
-                    float env = expf(-t * 15.0f);
-                    sample = sinf(t * currentFreq * 2.0f * (float)M_PI) * v * env;
-                } else if (ctx->sounds[s].type == 1) {
-                    float env = expf(-t * 5.0f);
-                    float mod = sinf(t * 15.0f * 2.0f * (float)M_PI);
-                    sample = (sinf(t * currentFreq * 2.0f * (float)M_PI) + mod * 0.3f) * v * env;
-                } else if (ctx->sounds[s].type == 2) {
-                    float env = expf(-t * 8.0f);
-                    float noise = ((float)(rand() % 100) / 100.0f - 0.5f) * 2.0f;
-                    sample = noise * v * env;
-                } else if (ctx->sounds[s].type == 3) {
-                    float env = 1.0f - progress;
-                    float mod = sinf(t * 8.0f * 2.0f * (float)M_PI);
-                    sample = (sinf(t * currentFreq * 2.0f * (float)M_PI) + mod * 0.5f) * v * env;
-                } else {
-                    sample = sinf(t * currentFreq * 2.0f * (float)M_PI) * v;
-                }
-                mixed += sample;
-
-                ctx->sounds[s].phase += 1.0f / (float)freq;
-                if (ctx->sounds[s].phase >= ctx->sounds[s].duration) {
-                    ctx->sounds[s].active = false;
-                }
-            }
-        }
-
-        if (mixed > 1.0f) mixed = 1.0f;
-        if (mixed < -1.0f) mixed = -1.0f;
-        buf[i] = mixed;
+    // Controls - Using SDL_RenderDebugText (built-in font)
+    const char* controls[] = {
+        "ARROWS TO MOVE LEFT/RIGHT",
+        "SPACE TO FIRE",
+        "Z FOR SUPERZAPPER",
+        "0-3 FOR TUNNELS",
+    };
+    
+    // Set a scale to make debug text larger
+    float oldScaleX, oldScaleY;
+    SDL_GetRenderScale(ctx->renderer, &oldScaleX, &oldScaleY);
+    SDL_SetRenderScale(ctx->renderer, 2.5f, 2.5f); // Scale up for "large ascii letters"
+    
+    SDL_SetRenderDrawColor(ctx->renderer, 57, 255, 20, 255); // Neon Green
+    for (int i = 0; i < 4; i++) {
+        // Since we are scaled, we need to divide the coordinates by the scale
+        float tx = ((float)w / 2.5f - (float)strlen(controls[i]) * 8.0f) * 0.5f;
+        float ty = (float)h * 0.4f / 2.5f + i * 20.0f;
+        SDL_RenderDebugText(ctx->renderer, tx, ty, controls[i]);
     }
+    
+    // Restore original scale
+    SDL_SetRenderScale(ctx->renderer, oldScaleX, oldScaleY);
 
-    SDL_PutAudioStreamData(stream, buf, len);
-    SDL_free(buf);
-}
+    // Bottom: PRESS ANY KEY
+    const char* prompt = "PRESS ANY KEY";
+    float promptSize = 32.0f;
+    float promptSpacing = promptSize * 0.25f;
+    float promptWidth = MeasureGlyphStringWidth(prompt, promptSize, promptSpacing);
+    SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 220);
+    DrawGlyphString(ctx->renderer, prompt, ((float)w - promptWidth) * 0.5f, h * 0.82f, promptSize, promptSpacing);
 
-void PlaySound(AudioContext* ctx, int type, float freqStart, float freqEnd, float duration, float volume) {
-    for (int s = 0; s < NUM_SOUND_SLOTS; s++) {
-        if (!ctx->sounds[s].active) {
-            ctx->sounds[s].type = type;
-            ctx->sounds[s].freqStart = freqStart;
-            ctx->sounds[s].freqEnd = freqEnd;
-            ctx->sounds[s].duration = duration;
-            ctx->sounds[s].volume = volume;
-            ctx->sounds[s].phase = 0.0f;
-            ctx->sounds[s].active = true;
-            return;
-        }
+    // Dynamic sound toggle hint
+    SDL_SetRenderScale(ctx->renderer, 1.5f, 1.5f);
+    SDL_SetRenderDrawColor(ctx->renderer, 150, 150, 150, 200);
+    const char* hint = "CLICK TO TOGGLE SOUND";
+    if (ctx->audio.stream && SDL_AudioStreamDevicePaused(ctx->audio.stream)) {
+        hint = "CLICK TO ENABLE SOUND";
+    } else {
+        hint = "CLICK TO MUTE SOUND";
     }
+    float hx = ((float)w / 1.5f - (float)strlen(hint) * 8.0f) * 0.5f;
+    float hy = (float)h * 0.95f / 1.5f;
+    SDL_RenderDebugText(ctx->renderer, hx, hy, hint);
+    SDL_SetRenderScale(ctx->renderer, 1.0f, 1.0f);
 }
 
 void PlayWav(AudioContext* ctx, WavType type, bool loop) {
@@ -486,6 +449,77 @@ void PlayWav(AudioContext* ctx, WavType type, bool loop) {
             return;
         }
     }
+}
+
+static void TriggerGameOverShape(AppContext* ctx) {
+    if (ctx->state == STATE_GAMEOVER) return;
+    ctx->state = STATE_GAMEOVER;
+    ctx->gameOver = true;
+    TunnelShape randomShape = (TunnelShape)(rand() % 4);
+    ctx->gameOverShape = randomShape;
+    ctx->selectedTunnelShape = randomShape;
+    ApplyTunnelShape(ctx, randomShape);
+    fprintf(stderr, "DEBUG: GameOver triggered, gameOverShape=%d, selectedTunnelShape=%d, tunnelShape=%d\n", ctx->gameOverShape, ctx->selectedTunnelShape, ctx->tunnelShape);
+    PlayWav(&ctx->audio, WAV_EXPLOSION, false);
+}
+
+void AudioCallback(void* userdata, SDL_AudioStream* stream, int len, int total_amount) {
+    AudioContext* ctx = (AudioContext*)userdata;
+    float buf[2048]; // Enough for 1024 stereo samples
+    int remainingBytes = len;
+
+    while (remainingBytes > 0) {
+        int bytesToProcess = remainingBytes;
+        if (bytesToProcess > (int)sizeof(buf)) bytesToProcess = (int)sizeof(buf);
+        int numSamples = bytesToProcess / (int)sizeof(float);
+        SDL_memset(buf, 0, bytesToProcess);
+
+        for (int i = 0; i < numSamples; i += 2) {
+            float mixedL = 0.0f;
+            float mixedR = 0.0f;
+
+            // Mix WAVs
+            for (int s = 0; s < MAX_ACTIVE_SOUNDS; s++) {
+                ActiveSound* as = &ctx->activeSounds[s];
+                if (as->active) {
+                    WavBuffer* wb = &ctx->wavs[as->wavIndex];
+                    if (wb->data && wb->len > 0) {
+                        float vol = 1.0f;
+                        // Reduce volume for everything except the background music (WAV_PERCUSSION)
+                        if (as->wavIndex != WAV_PERCUSSION) {
+                            vol = 0.125f;
+                        }
+                        mixedL += wb->data[as->pos] * vol;
+                        mixedR += wb->data[as->pos + 1] * vol;
+                        as->pos += 2;
+                        if (as->pos >= wb->len) {
+                            if (as->loop) {
+                                as->pos = 0;
+                            } else {
+                                as->active = false;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Procedural sounds disabled to avoid "residual sounds"
+
+            if (mixedL > 1.0f) mixedL = 1.0f;
+            if (mixedL < -1.0f) mixedL = -1.0f;
+            if (mixedR > 1.0f) mixedR = 1.0f;
+            if (mixedR < -1.0f) mixedR = -1.0f;
+            buf[i] = mixedL;
+            buf[i+1] = mixedR;
+        }
+
+        SDL_PutAudioStreamData(stream, buf, bytesToProcess);
+        remainingBytes -= bytesToProcess;
+    }
+}
+
+void PlaySound(AudioContext* ctx, int type, float freqStart, float freqEnd, float duration, float volume) {
+    (void)ctx; (void)type; (void)freqStart; (void)freqEnd; (void)duration; (void)volume;
 }
 
 void Project(Point3D p, int width, int height, float* sx, float* sy) {
@@ -692,6 +726,20 @@ void DrawHUD(AppContext* ctx, int w, int h) {
         SDL_RenderLine(ctx->renderer, 20, 45, 30, 45);
         SDL_RenderLine(ctx->renderer, 25, 40, 25, 50); // Small "+"
     }
+
+    // Dynamic sound toggle hint in HUD (small, at bottom)
+    SDL_SetRenderScale(ctx->renderer, 1.0f, 1.0f);
+    SDL_SetRenderDrawColor(ctx->renderer, 100, 100, 100, 150);
+    const char* hint = "CLICK TO TOGGLE SOUND";
+    if (ctx->audio.stream && SDL_AudioStreamDevicePaused(ctx->audio.stream)) {
+        hint = "CLICK TO ENABLE SOUND";
+    } else {
+        hint = "CLICK TO MUTE SOUND";
+    }
+    // Draw at bottom right, small
+    float hx = (float)w - (float)strlen(hint) * 8.0f - 10.0f;
+    float hy = (float)h - 20.0f;
+    SDL_RenderDebugText(ctx->renderer, hx, hy, hint);
 }
 
 void MainLoop(void* arg) {
@@ -707,26 +755,44 @@ void MainLoop(void* arg) {
             emscripten_cancel_main_loop();
 #endif
         }
-        if (event.type == SDL_EVENT_KEY_DOWN) {
+        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
             if (ctx->audio.stream) {
-                SDL_ResumeAudioStreamDevice(ctx->audio.stream);
+                static bool gestureReceived = false;
+                if (!gestureReceived) {
+                    SDL_ResumeAudioStreamDevice(ctx->audio.stream);
+                    gestureReceived = true;
+                } else {
+                    if (SDL_AudioStreamDevicePaused(ctx->audio.stream)) {
+                        SDL_ResumeAudioStreamDevice(ctx->audio.stream);
+                    } else {
+                        SDL_PauseAudioStreamDevice(ctx->audio.stream);
+                    }
+                }
             }
-            if (ctx->gameOver) {
+        }
+        if (event.type == SDL_EVENT_KEY_DOWN) {
+            if (ctx->state == STATE_LANDING) {                ctx->state = STATE_PLAYING;
+                ResetGame(ctx);
+                continue;
+            }
+            if (ctx->state == STATE_GAMEOVER) {
                 fprintf(stderr, "DEBUG: Key pressed during gameOver. scancode=%d, key=%d, repeat=%d\n", event.key.scancode, event.key.key, event.key.repeat);
                 // Try to restart with a specific shape (0-3 keys)
                 if (RestartWithShape(ctx, event.key.scancode, event.key.key, event.key.repeat)) {
                     fprintf(stderr, "DEBUG: RestartWithShape returned true\n");
+                    ctx->state = STATE_PLAYING;
                     continue;
                 }
                 // Any other key: restart with the already-selected random geometry
                 fprintf(stderr, "DEBUG: Calling ContinueGameWithSelectedGeometry, selectedTunnelShape=%d\n", ctx->selectedTunnelShape);
                 ContinueGameWithSelectedGeometry(ctx);
+                ctx->state = STATE_PLAYING;
                 fprintf(stderr, "DEBUG: After continue, gameOver=%d, selectedTunnelShape=%d, tunnelShape=%d\n", ctx->gameOver, ctx->selectedTunnelShape, ctx->tunnelShape);
                 continue;
             }
             if (event.key.scancode == SDL_SCANCODE_LEFT) ctx->playerSegment = (ctx->playerSegment - 1 + NUM_SIDES) % NUM_SIDES;
             if (event.key.scancode == SDL_SCANCODE_RIGHT) ctx->playerSegment = (ctx->playerSegment + 1) % NUM_SIDES;
-            if (!ctx->gameOver) {
+            if (ctx->state == STATE_PLAYING) {
                 if (event.key.scancode == SDL_SCANCODE_0 || event.key.key == SDLK_0) {
                     SelectTunnelShape(ctx, TUNNEL_IRREGULAR);
                 }
@@ -760,7 +826,7 @@ void MainLoop(void* arg) {
         }
     }
 
-    if (!ctx->gameOver) {
+    if (ctx->state == STATE_PLAYING) {
         if (ctx->flashTimer > 0) ctx->flashTimer--;
         // Move forward
         ctx->tunnelOffset += 0.02f;
@@ -797,12 +863,11 @@ void MainLoop(void* arg) {
                 if (ctx->enemies[i].z < 2.0f) {
                     ctx->enemies[i].active = false;
                     ctx->lives--;
-                    PlaySound(&ctx->audio, 2, 100.0f, 100.0f, 0.15f, 0.5f);
+                    PlayWav(&ctx->audio, WAV_EXPLOSION, false);
                     if (ctx->lives <= 0) {
                         TriggerGameOverShape(ctx);
                     }
                 }
-
                 for (int j = 0; j < MAX_SHOTS; j++) {
                     if (ctx->shots[j].active && ShotEnemyHit(ctx, &ctx->shots[j], &ctx->enemies[i])) {
                         ctx->shots[j].active = false;
@@ -816,7 +881,7 @@ void MainLoop(void* arg) {
         }
     }
 
-    if (ctx->gameOver) {
+    if (ctx->state == STATE_GAMEOVER) {
         SDL_SetRenderDrawColor(ctx->renderer, 50, 0, 0, 255); // Dark red background
     } else if (ctx->flashTimer > 0) {
         SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 255); // White flash
@@ -825,107 +890,111 @@ void MainLoop(void* arg) {
     }
     SDL_RenderClear(ctx->renderer);
 
-    // Draw Tunnel
-    for (int r = 0; r < NUM_RINGS; r++) {
-        float z = (float)(NUM_RINGS - r) * RING_DISTANCE - ctx->tunnelOffset;
-        Uint8 color_val = (Uint8)(255 - (r * (255 / NUM_RINGS)));
-        
-        for (int s = 0; s < NUM_SIDES; s++) {
-            float param1 = (float)s / (float)NUM_SIDES;
-            float param2 = (float)(s + 1) / (float)NUM_SIDES;
-
-            float tx1, ty1, tx2, ty2;
-            TunnelXY(param1, ctx->tunnelShape, &tx1, &ty1);
-            TunnelXY(param2, ctx->tunnelShape, &tx2, &ty2);
-
-            Point3D p1 = {tx1, ty1, z};
-            Point3D p2 = {tx2, ty2, z};
-            Point3D p3 = {tx1, ty1, z + RING_DISTANCE};
-
-            float x1, y1, x2, y2, x3, y3;
-            Project(p1, w, h, &x1, &y1);
-            Project(p2, w, h, &x2, &y2);
-            Project(p3, w, h, &x3, &y3);
-
-            SDL_SetRenderDrawColor(ctx->renderer, 0, color_val / 2, color_val, 255);
-            SDL_RenderLine(ctx->renderer, x1, y1, x3, y3);
-
-            SDL_SetRenderDrawColor(ctx->renderer, 0, color_val, color_val, 255);
-            SDL_RenderLine(ctx->renderer, x1, y1, x2, y2);
-        }
-    }
-
-    // Draw Enemies
-    for (int i = 0; i < MAX_ENEMIES; i++) {
-        if (ctx->enemies[i].active) {
-            float param1 = (float)ctx->enemies[i].segment / (float)NUM_SIDES;
-            float param2 = (float)(ctx->enemies[i].segment + 1) / (float)NUM_SIDES;
-            float z = ctx->enemies[i].z;
+    if (ctx->state == STATE_LANDING) {
+        DrawLandingPage(ctx, w, h);
+    } else {
+        // Draw Tunnel
+        for (int r = 0; r < NUM_RINGS; r++) {
+            float z = (float)(NUM_RINGS - r) * RING_DISTANCE - ctx->tunnelOffset;
+            Uint8 color_val = (Uint8)(255 - (r * (255 / NUM_RINGS)));
             
-            // Draw an "X" in the segment
-            Point3D p[4];
-            float tx1, ty1, tx2, ty2;
-            TunnelXY(param1, ctx->tunnelShape, &tx1, &ty1);
-            TunnelXY(param2, ctx->tunnelShape, &tx2, &ty2);
-            p[0] = (Point3D){tx1, ty1, z};
-            p[1] = (Point3D){tx2, ty2, z + 0.5f};
-            p[2] = (Point3D){tx2, ty2, z};
-            p[3] = (Point3D){tx1, ty1, z + 0.5f};
+            for (int s = 0; s < NUM_SIDES; s++) {
+                float param1 = (float)s / (float)NUM_SIDES;
+                float param2 = (float)(s + 1) / (float)NUM_SIDES;
 
-            float sx[4], sy[4];
-            for(int k=0; k<4; k++) Project(p[k], w, h, &sx[k], &sy[k]);
+                float tx1, ty1, tx2, ty2;
+                TunnelXY(param1, ctx->tunnelShape, &tx1, &ty1);
+                TunnelXY(param2, ctx->tunnelShape, &tx2, &ty2);
 
-            SDL_SetRenderDrawColor(ctx->renderer, 0, 255, 0, 255);
-            SDL_RenderLine(ctx->renderer, sx[0], sy[0], sx[1], sy[1]);
-            SDL_RenderLine(ctx->renderer, sx[2], sy[2], sx[3], sy[3]);
+                Point3D p1 = {tx1, ty1, z};
+                Point3D p2 = {tx2, ty2, z};
+                Point3D p3 = {tx1, ty1, z + RING_DISTANCE};
+
+                float x1, y1, x2, y2, x3, y3;
+                Project(p1, w, h, &x1, &y1);
+                Project(p2, w, h, &x2, &y2);
+                Project(p3, w, h, &x3, &y3);
+
+                SDL_SetRenderDrawColor(ctx->renderer, 0, color_val / 2, color_val, 255);
+                SDL_RenderLine(ctx->renderer, x1, y1, x3, y3);
+
+                SDL_SetRenderDrawColor(ctx->renderer, 0, color_val, color_val, 255);
+                SDL_RenderLine(ctx->renderer, x1, y1, x2, y2);
+            }
         }
-    }
 
-    // Draw Shots
-    SDL_SetRenderDrawBlendMode(ctx->renderer, SDL_BLENDMODE_ADD);
-    for (int i = 0; i < MAX_SHOTS; i++) {
-        if (ctx->shots[i].active) {
-            float param1 = (float)ctx->shots[i].segment / (float)NUM_SIDES;
-            float param2 = (float)(ctx->shots[i].segment + 1) / (float)NUM_SIDES;
-            float z_start = ctx->shots[i].z;
-            float z_end = z_start + 0.9f;
+        // Draw Enemies
+        for (int i = 0; i < MAX_ENEMIES; i++) {
+            if (ctx->enemies[i].active) {
+                float param1 = (float)ctx->enemies[i].segment / (float)NUM_SIDES;
+                float param2 = (float)(ctx->enemies[i].segment + 1) / (float)NUM_SIDES;
+                float z = ctx->enemies[i].z;
+                
+                // Draw an "X" in the segment
+                Point3D p[4];
+                float tx1, ty1, tx2, ty2;
+                TunnelXY(param1, ctx->tunnelShape, &tx1, &ty1);
+                TunnelXY(param2, ctx->tunnelShape, &tx2, &ty2);
+                p[0] = (Point3D){tx1, ty1, z};
+                p[1] = (Point3D){tx2, ty2, z + 0.5f};
+                p[2] = (Point3D){tx2, ty2, z};
+                p[3] = (Point3D){tx1, ty1, z + 0.5f};
 
-            float tx1, ty1, tx2, ty2;
-            TunnelXY(param1, ctx->tunnelShape, &tx1, &ty1);
-            TunnelXY(param2, ctx->tunnelShape, &tx2, &ty2);
+                float sx[4], sy[4];
+                for(int k=0; k<4; k++) Project(p[k], w, h, &sx[k], &sy[k]);
 
-            Point3D p1 = {tx1, ty1, z_start};
-            Point3D p2 = {tx2, ty2, z_start};
-            Point3D p3 = {tx1, ty1, z_end};
-            Point3D p4 = {tx2, ty2, z_end};
-
-            float x1, y1, x2, y2, x3, y3, x4, y4;
-            Project(p1, w, h, &x1, &y1);
-            Project(p2, w, h, &x2, &y2);
-            Project(p3, w, h, &x3, &y3);
-            Project(p4, w, h, &x4, &y4);
-
-            SDL_SetRenderDrawColor(ctx->renderer, 200, 0, 0, 180);
-            SDL_RenderLine(ctx->renderer, x1 - 1.0f, y1, x3 - 1.0f, y3);
-            SDL_RenderLine(ctx->renderer, x1 + 1.0f, y1, x3 + 1.0f, y3);
-            SDL_RenderLine(ctx->renderer, x1, y1 - 1.0f, x3, y3 - 1.0f);
-            SDL_RenderLine(ctx->renderer, x1, y1 + 1.0f, x3, y3 + 1.0f);
-            SDL_RenderLine(ctx->renderer, x2 - 1.0f, y2, x4 - 1.0f, y4);
-            SDL_RenderLine(ctx->renderer, x2 + 1.0f, y2, x4 + 1.0f, y4);
-            SDL_RenderLine(ctx->renderer, x2, y2 - 1.0f, x4, y4 - 1.0f);
-            SDL_RenderLine(ctx->renderer, x2, y2 + 1.0f, x4, y4 + 1.0f);
-
-            SDL_SetRenderDrawColor(ctx->renderer, 255, 0, 0, 255);
-            SDL_RenderLine(ctx->renderer, x1, y1, x3, y3);
-            SDL_RenderLine(ctx->renderer, x2, y2, x4, y4);
+                SDL_SetRenderDrawColor(ctx->renderer, 0, 255, 0, 255);
+                SDL_RenderLine(ctx->renderer, sx[0], sy[0], sx[1], sy[1]);
+                SDL_RenderLine(ctx->renderer, sx[2], sy[2], sx[3], sy[3]);
+            }
         }
-    }
-    SDL_SetRenderDrawBlendMode(ctx->renderer, SDL_BLENDMODE_BLEND);
 
-    DrawBlaster(ctx, w, h);
-    DrawHUD(ctx, w, h);
-    if (ctx->gameOver) {
-        DrawGameOverPrompt(ctx, w, h);
+        // Draw Shots
+        SDL_SetRenderDrawBlendMode(ctx->renderer, SDL_BLENDMODE_ADD);
+        for (int i = 0; i < MAX_SHOTS; i++) {
+            if (ctx->shots[i].active) {
+                float param1 = (float)ctx->shots[i].segment / (float)NUM_SIDES;
+                float param2 = (float)(ctx->shots[i].segment + 1) / (float)NUM_SIDES;
+                float z_start = ctx->shots[i].z;
+                float z_end = z_start + 0.9f;
+
+                float tx1, ty1, tx2, ty2;
+                TunnelXY(param1, ctx->tunnelShape, &tx1, &ty1);
+                TunnelXY(param2, ctx->tunnelShape, &tx2, &ty2);
+
+                Point3D p1 = {tx1, ty1, z_start};
+                Point3D p2 = {tx2, ty2, z_start};
+                Point3D p3 = {tx1, ty1, z_end};
+                Point3D p4 = {tx2, ty2, z_end};
+
+                float x1, y1, x2, y2, x3, y3, x4, y4;
+                Project(p1, w, h, &x1, &y1);
+                Project(p2, w, h, &x2, &y2);
+                Project(p3, w, h, &x3, &y3);
+                Project(p4, w, h, &x4, &y4);
+
+                SDL_SetRenderDrawColor(ctx->renderer, 200, 0, 0, 180);
+                SDL_RenderLine(ctx->renderer, x1 - 1.0f, y1, x3 - 1.0f, y3);
+                SDL_RenderLine(ctx->renderer, x1 + 1.0f, y1, x3 + 1.0f, y3);
+                SDL_RenderLine(ctx->renderer, x1, y1 - 1.0f, x3, y3 - 1.0f);
+                SDL_RenderLine(ctx->renderer, x1, y1 + 1.0f, x3, y3 + 1.0f);
+                SDL_RenderLine(ctx->renderer, x2 - 1.0f, y2, x4 - 1.0f, y4);
+                SDL_RenderLine(ctx->renderer, x2 + 1.0f, y2, x4 + 1.0f, y4);
+                SDL_RenderLine(ctx->renderer, x2, y2 - 1.0f, x4, y4 - 1.0f);
+                SDL_RenderLine(ctx->renderer, x2, y2 + 1.0f, x4, y4 + 1.0f);
+
+                SDL_SetRenderDrawColor(ctx->renderer, 255, 0, 0, 255);
+                SDL_RenderLine(ctx->renderer, x1, y1, x3, y3);
+                SDL_RenderLine(ctx->renderer, x2, y2, x4, y4);
+            }
+        }
+        SDL_SetRenderDrawBlendMode(ctx->renderer, SDL_BLENDMODE_BLEND);
+
+        DrawBlaster(ctx, w, h);
+        DrawHUD(ctx, w, h);
+        if (ctx->state == STATE_GAMEOVER) {
+            DrawGameOverPrompt(ctx, w, h);
+        }
     }
 
     SDL_RenderPresent(ctx->renderer);
@@ -989,20 +1058,23 @@ int main(int argc, char* argv[]) {
     ctx.window = SDL_CreateWindow("Tempest SDL3", 800, 800, 0);
     ctx.renderer = SDL_CreateRenderer(ctx.window, NULL);
     
-    SDL_AudioSpec targetSpec = {SDL_AUDIO_F32, 1, 48000};
+    SDL_AudioSpec targetSpec = {SDL_AUDIO_F32, 2, 44100};
     ctx.audio.stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &targetSpec, &AudioCallback, &ctx.audio);
     
     if (ctx.audio.stream) {
-        LoadAndConvertWAV("laserzap.wav", &targetSpec, &ctx.audio.wavs[WAV_LASERZAP]);
-        LoadAndConvertWAV("explosion.wav", &targetSpec, &ctx.audio.wavs[WAV_EXPLOSION]);
-        LoadAndConvertWAV("percussion.wav", &targetSpec, &ctx.audio.wavs[WAV_PERCUSSION]);
-        LoadAndConvertWAV("coin.wav", &targetSpec, &ctx.audio.wavs[WAV_COIN]);
+        if (!LoadAndConvertWAV("laserzap.wav", &targetSpec, &ctx.audio.wavs[WAV_LASERZAP])) fprintf(stderr, "Failed laserzap\n");
+        if (!LoadAndConvertWAV("explosion.wav", &targetSpec, &ctx.audio.wavs[WAV_EXPLOSION])) fprintf(stderr, "Failed explosion\n");
+        if (!LoadAndConvertWAV("percussion.wav", &targetSpec, &ctx.audio.wavs[WAV_PERCUSSION])) fprintf(stderr, "Failed percussion\n");
+        if (!LoadAndConvertWAV("coin.wav", &targetSpec, &ctx.audio.wavs[WAV_COIN])) fprintf(stderr, "Failed coin\n");
         
         PlayWav(&ctx.audio, WAV_PERCUSSION, true);
+#ifndef __EMSCRIPTEN__
         SDL_ResumeAudioStreamDevice(ctx.audio.stream);
+#endif
     }
     
     ctx.running = true;
+    ctx.state = STATE_LANDING;
     ResetGame(&ctx);
 
 #ifdef __EMSCRIPTEN__
