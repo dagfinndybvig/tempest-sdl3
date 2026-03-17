@@ -167,6 +167,72 @@ static const GlyphLine glyphK[] = {
     {0.0f, 0.5f, 1.0f, 0.0f},
 };
 
+static const GlyphLine glyphG[] = {
+    {1.0f, 1.0f, 0.0f, 1.0f},
+    {0.0f, 1.0f, 0.0f, 0.0f},
+    {0.0f, 0.0f, 1.0f, 0.0f},
+    {1.0f, 0.0f, 1.0f, 0.5f},
+    {1.0f, 0.5f, 0.5f, 0.5f},
+};
+
+static const GlyphLine glyphM[] = {
+    {0.0f, 0.0f, 0.0f, 1.0f},
+    {0.0f, 1.0f, 0.5f, 0.5f},
+    {0.5f, 0.5f, 1.0f, 1.0f},
+    {1.0f, 1.0f, 1.0f, 0.0f},
+};
+
+static const GlyphLine glyphO[] = {
+    {0.0f, 0.0f, 0.0f, 1.0f},
+    {0.0f, 1.0f, 1.0f, 1.0f},
+    {1.0f, 1.0f, 1.0f, 0.0f},
+    {1.0f, 0.0f, 0.0f, 0.0f},
+};
+
+static const GlyphLine glyphV[] = {
+    {0.0f, 1.0f, 0.5f, 0.0f},
+    {0.5f, 0.0f, 1.0f, 1.0f},
+};
+
+static const GlyphLine glyphU[] = {
+    {0.0f, 1.0f, 0.0f, 0.0f},
+    {0.0f, 0.0f, 1.0f, 0.0f},
+    {1.0f, 0.0f, 1.0f, 1.0f},
+};
+
+static const GlyphLine glyphC[] = {
+    {1.0f, 1.0f, 0.0f, 1.0f},
+    {0.0f, 1.0f, 0.0f, 0.0f},
+    {0.0f, 0.0f, 1.0f, 0.0f},
+};
+
+static const GlyphLine glyphT[] = {
+    {0.0f, 1.0f, 1.0f, 1.0f},
+    {0.5f, 1.0f, 0.5f, 0.0f},
+};
+
+static const GlyphLine glyphI[] = {
+    {0.0f, 1.0f, 1.0f, 1.0f},
+    {0.5f, 1.0f, 0.5f, 0.0f},
+    {0.0f, 0.0f, 1.0f, 0.0f},
+};
+
+static const GlyphLine glyphColon[] = {
+    {0.45f, 0.7f, 0.55f, 0.7f},
+    {0.45f, 0.3f, 0.55f, 0.3f},
+};
+
+static const GlyphLine glyphD0[] = { {0,0,0,1}, {0,1,1,1}, {1,1,1,0}, {1,0,0,0} };
+static const GlyphLine glyphD1[] = { {0.5,0,0.5,1}, {0.2,0.8,0.5,1} };
+static const GlyphLine glyphD2[] = { {0,1,1,1}, {1,1,1,0.5}, {1,0.5,0,0.5}, {0,0.5,0,0}, {0,0,1,0} };
+static const GlyphLine glyphD3[] = { {0,1,1,1}, {1,1,1,0}, {1,0,0,0}, {0,0.5,1,0.5} };
+static const GlyphLine glyphD4[] = { {0,1,0,0.5}, {0,0.5,1,0.5}, {1,1,1,0} };
+static const GlyphLine glyphD5[] = { {1,1,0,1}, {0,1,0,0.5}, {0,0.5,1,0.5}, {1,0.5,1,0}, {1,0,0,0} };
+static const GlyphLine glyphD6[] = { {1,1,0,1}, {0,1,0,0}, {0,0,1,0}, {1,0,1,0.5}, {1,0.5,0,0.5} };
+static const GlyphLine glyphD7[] = { {0,1,1,1}, {1,1,0.4,0} };
+static const GlyphLine glyphD8[] = { {0,0,0,1}, {0,1,1,1}, {1,1,1,0}, {1,0,0,0}, {0,0.5,1,0.5} };
+static const GlyphLine glyphD9[] = { {1,0,1,1}, {1,1,0,1}, {0,1,0,0.5}, {0,0.5,1,0.5} };
+
 static const Glyph glyphs[] = {
     {'P', glyphP, (int)(sizeof(glyphP) / sizeof(GlyphLine))},
     {'R', glyphR, (int)(sizeof(glyphR) / sizeof(GlyphLine))},
@@ -176,6 +242,25 @@ static const Glyph glyphs[] = {
     {'N', glyphN, (int)(sizeof(glyphN) / sizeof(GlyphLine))},
     {'Y', glyphY, (int)(sizeof(glyphY) / sizeof(GlyphLine))},
     {'K', glyphK, (int)(sizeof(glyphK) / sizeof(GlyphLine))},
+    {'G', glyphG, (int)(sizeof(glyphG) / sizeof(GlyphLine))},
+    {'M', glyphM, (int)(sizeof(glyphM) / sizeof(GlyphLine))},
+    {'O', glyphO, (int)(sizeof(glyphO) / sizeof(GlyphLine))},
+    {'V', glyphV, (int)(sizeof(glyphV) / sizeof(GlyphLine))},
+    {'U', glyphU, (int)(sizeof(glyphU) / sizeof(GlyphLine))},
+    {'C', glyphC, (int)(sizeof(glyphC) / sizeof(GlyphLine))},
+    {'T', glyphT, (int)(sizeof(glyphT) / sizeof(GlyphLine))},
+    {'I', glyphI, (int)(sizeof(glyphI) / sizeof(GlyphLine))},
+    {':', glyphColon, (int)(sizeof(glyphColon) / sizeof(GlyphLine))},
+    {'0', glyphD0, (int)(sizeof(glyphD0) / sizeof(GlyphLine))},
+    {'1', glyphD1, (int)(sizeof(glyphD1) / sizeof(GlyphLine))},
+    {'2', glyphD2, (int)(sizeof(glyphD2) / sizeof(GlyphLine))},
+    {'3', glyphD3, (int)(sizeof(glyphD3) / sizeof(GlyphLine))},
+    {'4', glyphD4, (int)(sizeof(glyphD4) / sizeof(GlyphLine))},
+    {'5', glyphD5, (int)(sizeof(glyphD5) / sizeof(GlyphLine))},
+    {'6', glyphD6, (int)(sizeof(glyphD6) / sizeof(GlyphLine))},
+    {'7', glyphD7, (int)(sizeof(glyphD7) / sizeof(GlyphLine))},
+    {'8', glyphD8, (int)(sizeof(glyphD8) / sizeof(GlyphLine))},
+    {'9', glyphD9, (int)(sizeof(glyphD9) / sizeof(GlyphLine))},
 };
 
 void ResetGame(AppContext* ctx);
@@ -223,14 +308,30 @@ static void DrawGlyphString(SDL_Renderer* renderer, const char* text, float x, f
 }
 
 static void DrawGameOverPrompt(AppContext* ctx, int w, int h) {
-    const char* message = "PRESS ANY KEY";
-    float size = 32.0f;
-    float spacing = size * 0.25f;
-    float totalWidth = MeasureGlyphStringWidth(message, size, spacing);
-    float startX = ((float)w - totalWidth) * 0.5f;
-    float startY = h * 0.55f;
-    SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 220);
-    DrawGlyphString(ctx->renderer, message, startX, startY, size, spacing);
+    // Top: GAME OVER
+    const char* title = "GAME OVER";
+    float titleSize = 64.0f;
+    float titleSpacing = titleSize * 0.2f;
+    float titleWidth = MeasureGlyphStringWidth(title, titleSize, titleSpacing);
+    SDL_SetRenderDrawColor(ctx->renderer, 255, 50, 50, 255);
+    DrawGlyphString(ctx->renderer, title, ((float)w - titleWidth) * 0.5f, h * 0.25f, titleSize, titleSpacing);
+
+    // Middle: YOUR SCORE: 12345
+    char scoreStr[32];
+    SDL_snprintf(scoreStr, sizeof(scoreStr), "YOUR SCORE: %d", ctx->score);
+    float scoreSize = 32.0f;
+    float scoreSpacing = scoreSize * 0.2f;
+    float scoreWidth = MeasureGlyphStringWidth(scoreStr, scoreSize, scoreSpacing);
+    SDL_SetRenderDrawColor(ctx->renderer, 57, 255, 20, 255); // Intense Neon Green
+    DrawGlyphString(ctx->renderer, scoreStr, ((float)w - scoreWidth) * 0.5f, h * 0.45f, scoreSize, scoreSpacing);
+
+    // Bottom: PRESS ANY KEY
+    const char* prompt = "PRESS ANY KEY";
+    float promptSize = 24.0f;
+    float promptSpacing = promptSize * 0.25f;
+    float promptWidth = MeasureGlyphStringWidth(prompt, promptSize, promptSpacing);
+    SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 200);
+    DrawGlyphString(ctx->renderer, prompt, ((float)w - promptWidth) * 0.5f, h * 0.65f, promptSize, promptSpacing);
 }
 
 void PlaySound(AudioContext* ctx, int type, float freqStart, float freqEnd, float duration, float volume);
