@@ -121,6 +121,7 @@ typedef struct {
     TunnelShape tunnelShape;
     TunnelShape selectedTunnelShape;
     int enemiesDestroyedCount;
+    float gameSpeedMultiplier;
 } AppContext;
 
 typedef struct {
@@ -670,6 +671,7 @@ void ResetGame(AppContext* ctx) {
     ctx->remainingInBurst = 0;
     ctx->nextBurstTime = SDL_GetTicks() + 10000 + (rand() % 20000); // 20s +/- 10s
     ctx->enemiesDestroyedCount = 0;
+    ctx->gameSpeedMultiplier = 1.0f;
     ApplyTunnelShape(ctx, ctx->selectedTunnelShape);
     for(int i=0; i<MAX_SHOTS; i++) ctx->shots[i].active = false;
     for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
@@ -886,7 +888,7 @@ void MainLoop(void* arg) {
         // Update enemies and collision
         for (int i = 0; i < MAX_ENEMIES; i++) {
             if (ctx->enemies[i].active) {
-                ctx->enemies[i].z -= 0.05f;
+                ctx->enemies[i].z -= 0.05f * ctx->gameSpeedMultiplier;
                 if (ctx->enemies[i].z < 2.0f) {
                     ctx->enemies[i].active = false;
                     ctx->lives--;
@@ -902,6 +904,13 @@ void MainLoop(void* arg) {
                         ctx->enemies[i].active = false;
                         ctx->score += 100;
                         ctx->enemiesDestroyedCount++;
+                        
+                        // Increase game speed slightly with each kill
+                        ctx->gameSpeedMultiplier += 0.02f;
+                        if (ctx->gameSpeedMultiplier > 2.5f) {
+                            ctx->gameSpeedMultiplier = 2.5f; // Cap maximum speed
+                        }
+                        
                         PlayWav(&ctx->audio, WAV_COIN, false);
                         
                         // Check if we should change geometry
@@ -955,7 +964,7 @@ void MainLoop(void* arg) {
         // Update burst shots
         for (int i = 0; i < MAX_BURST_SHOTS; i++) {
             if (ctx->burstShots[i].active) {
-                ctx->burstShots[i].z -= 0.15f; // Faster than enemies
+                ctx->burstShots[i].z -= 0.15f * ctx->gameSpeedMultiplier; // Faster than enemies
                 if (ctx->burstShots[i].z < 2.0f) {
                     ctx->burstShots[i].active = false;
                     // Collision with player
