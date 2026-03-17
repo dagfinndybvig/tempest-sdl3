@@ -559,7 +559,7 @@ static void TunnelXY(float param, TunnelShape shape, float* outx, float* outy) {
             default: *outx = -r + 2.0f * r * frac; *outy = -r; break;
         }
     } else { /* TUNNEL_FLAT */
-        float angle = param * 2.0f * M_PI;
+        float angle = param * 2.0f * M_PI; 
         float radiusNoise = NoiseValue(param, 6.5f, 1.1f) * 0.12f;
         float verticalNoise = NoiseValue(param + 0.5f, 5.0f, 1.5f) * 0.35f;
         float asymmetry = NoiseValue(param + 1.3f, 9.0f, 0.7f) * 0.07f;
@@ -790,8 +790,8 @@ void MainLoop(void* arg) {
                 }
                 continue; // Ignore other keys
             }
-            if (event.key.scancode == SDL_SCANCODE_LEFT) ctx->playerSegment = (ctx->playerSegment - 1 + NUM_SIDES) % NUM_SIDES;
-            if (event.key.scancode == SDL_SCANCODE_RIGHT) ctx->playerSegment = (ctx->playerSegment + 1) % NUM_SIDES;
+            if (event.key.scancode == SDL_SCANCODE_LEFT) ctx->playerSegment = (ctx->playerSegment + 1) % NUM_SIDES;
+            if (event.key.scancode == SDL_SCANCODE_RIGHT) ctx->playerSegment = (ctx->playerSegment - 1 + NUM_SIDES) % NUM_SIDES;
             if (ctx->state == STATE_PLAYING) {
                 if (event.key.scancode == SDL_SCANCODE_0 || event.key.key == SDLK_0) {
                     SelectTunnelShape(ctx, TUNNEL_IRREGULAR);
