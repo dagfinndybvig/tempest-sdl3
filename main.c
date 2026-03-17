@@ -685,6 +685,8 @@ static void ContinueGameWithSelectedGeometry(AppContext* ctx) {
     ctx->superzapperUsed = false;
     ctx->flashTimer = 0;
     ctx->playerSegment = 0;
+    ctx->enemiesDestroyedCount = 0;
+    ctx->gameSpeedMultiplier = 1.0f;
     fprintf(stderr, "DEBUG: ContinueGameWithSelectedGeometry using gameOverShape=%d\n", ctx->gameOverShape);
     ctx->selectedTunnelShape = ctx->gameOverShape;
     ApplyTunnelShape(ctx, ctx->gameOverShape);

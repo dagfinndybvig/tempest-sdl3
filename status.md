@@ -18,6 +18,7 @@ The project is currently a functional 3D vector-style engine prototype built wit
   - `Space`: Fire red shots down the tunnel segments.
   - `Z`: Trigger Superzapper (one-time screen clear).
   - `R`: Reset game.
+  - `0-3`: Switch tunnel geometry during gameplay.
 - **Enemy System**: 
   - Enemies are rendered as green "X" shapes.
   - They spawn at the far end of the tunnel and move toward the player.
@@ -25,6 +26,11 @@ The project is currently a functional 3D vector-style engine prototype built wit
 - **Scoring & Lives**:
   - Player starts with 3 lives. Losing a life triggers a "Game Over" when reaching zero.
   - Destroying enemies adds 100 points to the score.
+- **Progressive Difficulty**:
+  - **Dynamic Geometry**: Every 8 enemies destroyed triggers a random tunnel geometry change.
+  - **Speed Increase**: Game speed increases by 2% with each enemy kill (capped at 2.5x normal speed).
+  - **State Preservation**: Score, lives, sound settings, and speed carry over through geometry changes.
+  - **Game Over Reset**: Speed and geometry reset to defaults when game restarts after Game Over.
 
 ### 3. User Interface (HUD)
 - **Vector Digit Rendering**: A custom line-based digit renderer draws the score and lives in a classic vector style.
@@ -72,5 +78,8 @@ For explosions when enemies are hit, implement a simple particle system:
 - [x] Add variable, tilted "flat" tunnel geometry with random wobble.
 - [x] Randomize the tunnel geometry when the player hits Game Over.
 - [x] Display a "PRESS ANY KEY" prompt when the game freezes at Game Over.
+- [x] Implement progressive difficulty system (speed increase + geometry changes).
+- [x] Add automatic tunnel geometry changes every 8 enemy kills.
+- [x] Implement game speed multiplier that increases with each kill.
 - [ ] Add "Spikers" that leave trails behind them.
 - [x] Implement the "Superzapper" (screen-clear ability).
