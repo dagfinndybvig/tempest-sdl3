@@ -607,6 +607,9 @@ void MainLoop(void* arg) {
 #endif
         }
         if (event.type == SDL_EVENT_KEY_DOWN) {
+            if (ctx->audio.stream) {
+                SDL_ResumeAudioStreamDevice(ctx->audio.stream);
+            }
             if (ctx->gameOver) {
                 fprintf(stderr, "DEBUG: Key pressed during gameOver. scancode=%d, key=%d, repeat=%d\n", event.key.scancode, event.key.key, event.key.repeat);
                 // Try to restart with a specific shape (0-3 keys)

@@ -71,7 +71,7 @@ var ENVIRONMENT_IS_SHELL = !ENVIRONMENT_IS_WEB && !ENVIRONMENT_IS_NODE && !ENVIR
 
 // --pre-jses are emitted after the Module integration code, so that they can
 // refer to Module (if they choose; they can also define Module)
-// include: /tmp/tmp60z31exa.js
+// include: /tmp/tmpgmeuq_t1.js
 
   if (!Module['expectedDataFileDownloads']) Module['expectedDataFileDownloads'] = 0;
   Module['expectedDataFileDownloads']++;
@@ -199,25 +199,25 @@ var ENVIRONMENT_IS_SHELL = !ENVIRONMENT_IS_WEB && !ENVIRONMENT_IS_NODE && !ENVIR
     }
 
     }
-    loadPackage({"files": [{"filename": "/laserzap.wav", "start": 0, "end": 145230}], "remote_package_size": 145230});
+    loadPackage({"files": [{"filename": "/coin.wav", "start": 0, "end": 180884}, {"filename": "/explosion.wav", "start": 180884, "end": 980332}, {"filename": "/laserzap.wav", "start": 980332, "end": 1125562}, {"filename": "/percussion.wav", "start": 1125562, "end": 8180518}], "remote_package_size": 8180518});
 
   })();
 
-// end include: /tmp/tmp60z31exa.js
-// include: /tmp/tmpozn83w5c.js
+// end include: /tmp/tmpgmeuq_t1.js
+// include: /tmp/tmpkpuccvks.js
 
     // All the pre-js content up to here must remain later on, we need to run
     // it.
     if ((typeof ENVIRONMENT_IS_WASM_WORKER != 'undefined' && ENVIRONMENT_IS_WASM_WORKER) || (typeof ENVIRONMENT_IS_PTHREAD != 'undefined' && ENVIRONMENT_IS_PTHREAD) || (typeof ENVIRONMENT_IS_AUDIO_WORKLET != 'undefined' && ENVIRONMENT_IS_AUDIO_WORKLET)) Module['preRun'] = [];
     var necessaryPreJSTasks = Module['preRun'].slice();
-  // end include: /tmp/tmpozn83w5c.js
-// include: /tmp/tmpyy98biq4.js
+  // end include: /tmp/tmpkpuccvks.js
+// include: /tmp/tmpgnkyavee.js
 
     if (!Module['preRun']) throw 'Module.preRun should exist because file support used it; did a pre-js delete it?';
     necessaryPreJSTasks.forEach((task) => {
       if (Module['preRun'].indexOf(task) < 0) throw 'All preRun tasks that exist before user pre-js code should remain after; did you replace Module or modify Module.preRun?';
     });
-  // end include: /tmp/tmpyy98biq4.js
+  // end include: /tmp/tmpgnkyavee.js
 
 
 var arguments_ = [];
