@@ -10,6 +10,7 @@ emcc main.c \
     --preload-file explosion.wav@/ \
     --preload-file percussion.wav@/ \
     --preload-file coin.wav@/ \
+    --preload-file shotburst.wav@/ \
     -o docs/index.html -sUSE_SDL=3 -sALLOW_MEMORY_GROWTH=1 -lm
 
 if [ $? -eq 0 ]; then

@@ -28,7 +28,8 @@ typedef enum {
     WAV_EXPLOSION = 1,
     WAV_PERCUSSION = 2,
     WAV_COIN = 3,
-    NUM_WAVS = 4
+    WAV_SHOTBURST = 4,
+    NUM_WAVS = 5
 } WavType;
 
 typedef struct {
@@ -59,6 +60,7 @@ typedef struct {
 #define FOV 300.0f
 #define MAX_SHOTS 10
 #define MAX_ENEMIES 5
+#define MAX_BURST_SHOTS 6
 
 typedef struct {
     float x, y, z;
@@ -75,6 +77,12 @@ typedef struct {
     int segment;
     bool active;
 } Enemy;
+
+typedef struct {
+    float z;
+    int segment;
+    bool active;
+} BurstShot;
 
 typedef enum {
     TUNNEL_IRREGULAR = 0,
@@ -99,6 +107,10 @@ typedef struct {
     float tunnelOffset; 
     Shot shots[MAX_SHOTS];
     Enemy enemies[MAX_ENEMIES];
+    BurstShot burstShots[MAX_BURST_SHOTS];
+    Uint64 nextBurstTime;
+    int remainingInBurst;
+    Uint64 nextBurstShotTime;
     Uint64 lastSpawnTime;
     int lives;
     bool gameOver; // We can eventually remove this in favor of state, but keeping for now to minimize diff
@@ -654,9 +666,12 @@ void ResetGame(AppContext* ctx) {
     ctx->superzapperUsed = false;
     ctx->flashTimer = 0;
     ctx->playerSegment = 0;
+    ctx->remainingInBurst = 0;
+    ctx->nextBurstTime = SDL_GetTicks() + 10000 + (rand() % 20000); // 20s +/- 10s
     ApplyTunnelShape(ctx, ctx->selectedTunnelShape);
     for(int i=0; i<MAX_SHOTS; i++) ctx->shots[i].active = false;
     for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
+    for(int i=0; i<MAX_BURST_SHOTS; i++) ctx->burstShots[i].active = false;
 }
 
 static void ContinueGameWithSelectedGeometry(AppContext* ctx) {
@@ -868,6 +883,7 @@ void MainLoop(void* arg) {
                         TriggerGameOverShape(ctx);
                     }
                 }
+
                 for (int j = 0; j < MAX_SHOTS; j++) {
                     if (ctx->shots[j].active && ShotEnemyHit(ctx, &ctx->shots[j], &ctx->enemies[i])) {
                         ctx->shots[j].active = false;
@@ -879,7 +895,50 @@ void MainLoop(void* arg) {
                 }
             }
         }
-    }
+
+        // --- NEW: Burst fire logic ---
+        if (ctx->remainingInBurst == 0) {
+            if (now >= ctx->nextBurstTime) {
+                ctx->remainingInBurst = MAX_BURST_SHOTS;
+                // Play sound immediately as a warning
+                PlayWav(&ctx->audio, WAV_SHOTBURST, false);
+                // Delay the first shot spawning by 500ms
+                ctx->nextBurstShotTime = now + 500;
+                // Schedule next burst (20 +/- 10s)
+                ctx->nextBurstTime = now + 10000 + (rand() % 20000);
+            }
+        } else {
+            if (now >= ctx->nextBurstShotTime) {
+                // Spawn one shot in the burst
+                for (int i = 0; i < MAX_BURST_SHOTS; i++) {
+                    if (!ctx->burstShots[i].active) {
+                        ctx->burstShots[i].active = true;
+                        ctx->burstShots[i].z = NUM_RINGS * RING_DISTANCE;
+                        ctx->burstShots[i].segment = ctx->playerSegment; // Aimed at blaster
+                        break;
+                    }
+                }
+                ctx->remainingInBurst--;
+                ctx->nextBurstShotTime = now + 40; // almost instant spacing
+            }
+        }
+
+        // Update burst shots
+        for (int i = 0; i < MAX_BURST_SHOTS; i++) {
+            if (ctx->burstShots[i].active) {
+                ctx->burstShots[i].z -= 0.15f; // Faster than enemies
+                if (ctx->burstShots[i].z < 2.0f) {
+                    ctx->burstShots[i].active = false;
+                    // Collision with player
+                    if (ctx->burstShots[i].segment == ctx->playerSegment) {
+                        ctx->lives--;
+                        PlayWav(&ctx->audio, WAV_EXPLOSION, false);
+                        if (ctx->lives <= 0) TriggerGameOverShape(ctx);
+                    }
+                }
+            }
+        }
+        }
 
     if (ctx->state == STATE_GAMEOVER) {
         SDL_SetRenderDrawColor(ctx->renderer, 50, 0, 0, 255); // Dark red background
@@ -946,9 +1005,39 @@ void MainLoop(void* arg) {
                 SDL_SetRenderDrawColor(ctx->renderer, 0, 255, 0, 255);
                 SDL_RenderLine(ctx->renderer, sx[0], sy[0], sx[1], sy[1]);
                 SDL_RenderLine(ctx->renderer, sx[2], sy[2], sx[3], sy[3]);
-            }
-        }
+                }
+                }
 
+                // Draw Burst Shots
+                for (int i = 0; i < MAX_BURST_SHOTS; i++) {
+                if (ctx->burstShots[i].active) {
+                float param1 = (float)ctx->burstShots[i].segment / (float)NUM_SIDES;
+                float param2 = (float)(ctx->burstShots[i].segment + 1) / (float)NUM_SIDES;
+                float z = ctx->burstShots[i].z;
+                float tx1, ty1, tx2, ty2;
+                TunnelXY(param1, ctx->tunnelShape, &tx1, &ty1);
+                TunnelXY(param2, ctx->tunnelShape, &tx2, &ty2);
+
+                // Center of the segment
+                float cx = (tx1 + tx2) * 0.5f;
+                float cy = (ty1 + ty2) * 0.5f;
+                float size = 0.1f;
+
+                Point3D p[4] = {
+                    {cx - size, cy - size, z},
+                    {cx + size, cy - size, z},
+                    {cx + size, cy + size, z},
+                    {cx - size, cy + size, z}
+                };
+                float sx[4], sy[4];
+                for(int k=0; k<4; k++) Project(p[k], w, h, &sx[k], &sy[k]);
+
+                SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 255);
+                for(int k=0; k<4; k++) {
+                    SDL_RenderLine(ctx->renderer, sx[k], sy[k], sx[(k+1)%4], sy[(k+1)%4]);
+                }
+                }
+                }
         // Draw Shots
         SDL_SetRenderDrawBlendMode(ctx->renderer, SDL_BLENDMODE_ADD);
         for (int i = 0; i < MAX_SHOTS; i++) {
@@ -1066,6 +1155,7 @@ int main(int argc, char* argv[]) {
         if (!LoadAndConvertWAV("explosion.wav", &targetSpec, &ctx.audio.wavs[WAV_EXPLOSION])) fprintf(stderr, "Failed explosion\n");
         if (!LoadAndConvertWAV("percussion.wav", &targetSpec, &ctx.audio.wavs[WAV_PERCUSSION])) fprintf(stderr, "Failed percussion\n");
         if (!LoadAndConvertWAV("coin.wav", &targetSpec, &ctx.audio.wavs[WAV_COIN])) fprintf(stderr, "Failed coin\n");
+        if (!LoadAndConvertWAV("shotburst.wav", &targetSpec, &ctx.audio.wavs[WAV_SHOTBURST])) fprintf(stderr, "Failed shotburst\n");
         
         PlayWav(&ctx.audio, WAV_PERCUSSION, true);
 #ifndef __EMSCRIPTEN__
