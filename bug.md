@@ -53,3 +53,5 @@ When the player presses a key during game over:
 - Verify what geometry values are logged during selection and restoration
 - Check if the issue is deterministic (always reverts to 1) or varies
 - Trace through state changes frame-by-frame during restart
+
+- [x] All known bugs have been solved.
