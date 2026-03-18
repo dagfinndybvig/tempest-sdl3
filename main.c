@@ -925,22 +925,15 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
     SDL_GetRenderScale(ctx->renderer, &oldScaleX, &oldScaleY);
     SDL_SetRenderScale(ctx->renderer, 2.5f, 2.5f);
     
-    // Draw high score table background (scaled coordinates)
-    float tableWidth = 400.0f / 2.5f; // Adjust for scale
-    float tableHeight = 400.0f / 2.5f;
-    float tableX = (float)w / 2.5f / 2.0f - tableWidth / 2.0f;
-    float tableY = (float)h / 2.5f / 2.0f - tableHeight / 2.0f;
+    // Use full window for high score display
+    float tableX = 10.0f; // Small margin
+    float tableY = 10.0f; // Small margin
     
-    // Draw border (white for visibility)
-    SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 255);
-    SDL_RenderLine(ctx->renderer, tableX, tableY, tableX + tableWidth, tableY);
-    SDL_RenderLine(ctx->renderer, tableX + tableWidth, tableY, tableX + tableWidth, tableY + tableHeight);
-    SDL_RenderLine(ctx->renderer, tableX + tableWidth, tableY + tableHeight, tableX, tableY + tableHeight);
-    SDL_RenderLine(ctx->renderer, tableX, tableY + tableHeight, tableX, tableY);
+    // Border removed to allow full window usage for high scores
     
     // Draw title in glowing red (same as TEMPEST title)
     SDL_SetRenderDrawColor(ctx->renderer, 255, 50, 50, 255); // Glowing red
-    float titleX = tableX + (tableWidth - (float)strlen("HIGH SCORE TABLE") * 8.0f) / 2.0f;
+    float titleX = tableX;
     SDL_RenderDebugText(ctx->renderer, titleX, tableY + 12.0f, "HIGH SCORE TABLE");
     
     // Restore neon green for scores
@@ -981,8 +974,7 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
     
     // Draw instructions (simplified - only show when not editing)
     if (!isEditing) {
-        float instrX = tableX + (tableWidth - (float)strlen("PRESS R TO CONTINUE") * 8.0f) / 2.0f;
-        SDL_RenderDebugText(ctx->renderer, instrX, tableY + tableHeight - 16.0f, "PRESS R TO CONTINUE");
+        SDL_RenderDebugText(ctx->renderer, tableX, tableY + 150.0f, "PRESS R TO CONTINUE");
     }
     
     // Restore original scale
