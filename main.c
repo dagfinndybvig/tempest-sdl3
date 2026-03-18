@@ -822,6 +822,7 @@ static void AddHighScore(AppContext* ctx, int score) {
             // Set up for name entry (now integrated into highscore display)
             ctx->newHighScorePosition = i;
             ctx->nameEntryCursorPos = 0;
+            memset(ctx->newHighScoreName, 0, sizeof(ctx->newHighScoreName));
             sprintf(ctx->newHighScoreName, "AAA");
             ctx->state = STATE_HIGHSCORE_DISPLAY;
             return;
@@ -1103,11 +1104,13 @@ void MainLoop(void* arg) {
                             ctx->nameEntryCursorPos--;
                             ctx->newHighScoreName[ctx->nameEntryCursorPos] = ' ';
                         }
-                    } else if (event.key.key >= 'a' && event.key.key <= 'z') {
-                        // Letter keys
+                    } else if (event.key.key >= 'a' && event.key.key <= 'z' && !event.key.repeat) {
+                        // Letter keys (ignore repeats to prevent multiple registrations)
                         if (ctx->nameEntryCursorPos < 19) {
                             ctx->newHighScoreName[ctx->nameEntryCursorPos] = (char)toupper(event.key.key);
                             ctx->nameEntryCursorPos++;
+                            // Ensure null termination
+                            ctx->newHighScoreName[ctx->nameEntryCursorPos] = '\0';
                         }
                     }
                 } else {
