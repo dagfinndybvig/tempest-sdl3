@@ -1,3 +1,5 @@
+The Tempest was a play by W. Shakespeare that featured the wizard Prospero.
+
 # Tempest SDL3 Prototype - Project Status
 
 This document tracks the current implementation status and provides technical guidance for future development of the Tempest SDL3 prototype.
