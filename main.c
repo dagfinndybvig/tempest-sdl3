@@ -45,6 +45,12 @@ typedef struct {
 } ActiveSound;
 
 #define MAX_ACTIVE_SOUNDS 16
+#define MAX_HIGHSCORES 5
+
+typedef struct {
+    char name[20];
+    int score;
+} HighScoreEntry;
 
 typedef struct {
     SDL_AudioStream* stream;
@@ -94,7 +100,9 @@ typedef enum {
 typedef enum {
     STATE_LANDING,
     STATE_PLAYING,
-    STATE_GAMEOVER
+    STATE_GAMEOVER,
+    STATE_HIGHSCORE_ENTRY,
+    STATE_HIGHSCORE_DISPLAY
 } GameState;
 
 typedef struct {
@@ -122,6 +130,11 @@ typedef struct {
     TunnelShape selectedTunnelShape;
     int enemiesDestroyedCount;
     float gameSpeedMultiplier;
+    HighScoreEntry highScores[MAX_HIGHSCORES];
+    bool showHighScores;
+    char newHighScoreName[20];
+    int newHighScorePosition;
+    int nameEntryCursorPos;
 } AppContext;
 
 typedef struct {
@@ -286,6 +299,8 @@ static const Glyph glyphs[] = {
 
 void ResetGame(AppContext* ctx);
 static void ContinueGameWithSelectedGeometry(AppContext* ctx);
+static void AddHighScore(AppContext* ctx, int score);
+static void FinalizeHighScoreEntry(AppContext* ctx);
 
 static const Glyph* GetGlyphByChar(char ch) {
     ch = (char)toupper((unsigned char)ch);
@@ -474,6 +489,9 @@ static void TriggerGameOverShape(AppContext* ctx) {
     ApplyTunnelShape(ctx, randomShape);
     fprintf(stderr, "DEBUG: GameOver triggered, gameOverShape=%d, selectedTunnelShape=%d, tunnelShape=%d\n", ctx->gameOverShape, ctx->selectedTunnelShape, ctx->tunnelShape);
     PlayWav(&ctx->audio, WAV_EXPLOSION, false);
+    
+    // Check if this score qualifies for high scores
+    AddHighScore(ctx, ctx->score);
 }
 
 void AudioCallback(void* userdata, SDL_AudioStream* stream, int len, int total_amount) {
@@ -671,6 +689,8 @@ void ResetGame(AppContext* ctx) {
     ctx->nextBurstTime = SDL_GetTicks() + 10000 + (rand() % 20000); // 20s +/- 10s
     ctx->enemiesDestroyedCount = 0;
     ctx->gameSpeedMultiplier = 1.0f;
+    ctx->showHighScores = false;
+    ctx->nameEntryCursorPos = 0;
     ApplyTunnelShape(ctx, ctx->selectedTunnelShape);
     for(int i=0; i<MAX_SHOTS; i++) ctx->shots[i].active = false;
     for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
@@ -691,6 +711,57 @@ static void ContinueGameWithSelectedGeometry(AppContext* ctx) {
     ApplyTunnelShape(ctx, ctx->gameOverShape);
     for(int i=0; i<MAX_SHOTS; i++) ctx->shots[i].active = false;
     for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
+}
+
+static void LoadHighScores(AppContext* ctx) {
+    FILE* f = fopen("highscores.txt", "rb");
+    if (f) {
+        fread(ctx->highScores, sizeof(HighScoreEntry), MAX_HIGHSCORES, f);
+        fclose(f);
+    } else {
+        // Initialize with default high scores (top 5)
+        for (int i = 0; i < MAX_HIGHSCORES; i++) {
+            sprintf(ctx->highScores[i].name, "AAA");
+            ctx->highScores[i].score = (MAX_HIGHSCORES - i) * 1000;
+        }
+    }
+}
+
+static void SaveHighScores(AppContext* ctx) {
+    FILE* f = fopen("highscores.txt", "wb");
+    if (f) {
+        fwrite(ctx->highScores, sizeof(HighScoreEntry), MAX_HIGHSCORES, f);
+        fclose(f);
+    }
+}
+
+static void AddHighScore(AppContext* ctx, int score) {
+    // Check if score qualifies for high score table
+    for (int i = 0; i < MAX_HIGHSCORES; i++) {
+        if (score > ctx->highScores[i].score) {
+            // Shift lower scores down
+            for (int j = MAX_HIGHSCORES - 1; j > i; j--) {
+                ctx->highScores[j] = ctx->highScores[j - 1];
+            }
+            // Set up for name entry
+            ctx->newHighScorePosition = i;
+            ctx->nameEntryCursorPos = 0;
+            sprintf(ctx->newHighScoreName, "AAA");
+            ctx->state = STATE_HIGHSCORE_ENTRY;
+            return;
+        }
+    }
+    // If no high score, go directly to game over
+    ctx->state = STATE_GAMEOVER;
+}
+
+static void FinalizeHighScoreEntry(AppContext* ctx) {
+    // Add the finalized score to the high score table
+    strcpy(ctx->highScores[ctx->newHighScorePosition].name, ctx->newHighScoreName);
+    ctx->highScores[ctx->newHighScorePosition].score = ctx->score;
+    
+    // Save high scores to file
+    SaveHighScores(ctx);
 }
 
 void DrawDigit(SDL_Renderer* renderer, int digit, float x, float y, float size) {
@@ -760,6 +831,91 @@ void DrawHUD(AppContext* ctx, int w, int h) {
     float hx = (float)w - (float)strlen(hint) * 8.0f - 10.0f;
     float hy = (float)h - 20.0f;
     SDL_RenderDebugText(ctx->renderer, hx, hy, hint);
+}
+
+static void DrawHighScoreEntryScreen(AppContext* ctx, int w, int h) {
+    SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 255);
+    
+    // Draw entry screen background
+    float boxWidth = 400.0f;
+    float boxHeight = 200.0f;
+    float boxX = (float)w / 2.0f - boxWidth / 2.0f;
+    float boxY = (float)h / 2.0f - boxHeight / 2.0f;
+    
+    // Draw border
+    SDL_RenderLine(ctx->renderer, boxX, boxY, boxX + boxWidth, boxY);
+    SDL_RenderLine(ctx->renderer, boxX + boxWidth, boxY, boxX + boxWidth, boxY + boxHeight);
+    SDL_RenderLine(ctx->renderer, boxX + boxWidth, boxY + boxHeight, boxX, boxY + boxHeight);
+    SDL_RenderLine(ctx->renderer, boxX, boxY + boxHeight, boxX, boxY);
+    
+    // Draw title
+    char title[50];
+    sprintf(title, "NEW HIGH SCORE: %d", ctx->score);
+    float titleX = boxX + (boxWidth - strlen(title) * 8.0f) / 2.0f;
+    SDL_RenderDebugText(ctx->renderer, titleX, boxY + 30.0f, title);
+    
+    // Draw position (now top 5)
+    char positionText[30];
+    sprintf(positionText, "Position #%d", ctx->newHighScorePosition + 1);
+    float posX = boxX + (boxWidth - strlen(positionText) * 8.0f) / 2.0f;
+    SDL_RenderDebugText(ctx->renderer, posX, boxY + 60.0f, positionText);
+    
+    // Draw name entry
+    char namePrompt[30];
+    sprintf(namePrompt, "Enter your name:");
+    float promptX = boxX + (boxWidth - strlen(namePrompt) * 8.0f) / 2.0f;
+    SDL_RenderDebugText(ctx->renderer, promptX, boxY + 90.0f, namePrompt);
+    
+    // Draw name being entered
+    float nameX = boxX + (boxWidth - strlen(ctx->newHighScoreName) * 8.0f) / 2.0f;
+    SDL_RenderDebugText(ctx->renderer, nameX, boxY + 120.0f, ctx->newHighScoreName);
+    
+    // Draw cursor
+    if ((SDL_GetTicks() / 500) % 2 == 0) {
+        float cursorX = nameX + ctx->nameEntryCursorPos * 8.0f;
+        SDL_RenderLine(ctx->renderer, cursorX, boxY + 120.0f, cursorX, boxY + 130.0f);
+    }
+    
+    // Draw instructions
+    char instructions[50];
+    sprintf(instructions, "Use letters A-Z, ENTER to confirm");
+    float instrX = boxX + (boxWidth - strlen(instructions) * 8.0f) / 2.0f;
+    SDL_RenderDebugText(ctx->renderer, instrX, boxY + 160.0f, instructions);
+}
+
+static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
+    SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 255);
+    
+    // Clear screen
+    SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 0, 255);
+    SDL_RenderClear(ctx->renderer);
+    SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 255);
+    
+    // Draw high score table background
+    float tableWidth = 400.0f;
+    float tableHeight = 400.0f;
+    float tableX = (float)w / 2.0f - tableWidth / 2.0f;
+    float tableY = (float)h / 2.0f - tableHeight / 2.0f;
+    
+    // Draw border
+    SDL_RenderLine(ctx->renderer, tableX, tableY, tableX + tableWidth, tableY);
+    SDL_RenderLine(ctx->renderer, tableX + tableWidth, tableY, tableX + tableWidth, tableY + tableHeight);
+    SDL_RenderLine(ctx->renderer, tableX + tableWidth, tableY + tableHeight, tableX, tableY + tableHeight);
+    SDL_RenderLine(ctx->renderer, tableX, tableY + tableHeight, tableX, tableY);
+    
+    // Draw title
+    SDL_RenderDebugText(ctx->renderer, tableX + 130.0f, tableY + 30.0f, "HIGH SCORE TABLE");
+    
+    // Draw high scores (score before name, no numbering)
+    for (int i = 0; i < MAX_HIGHSCORES; i++) {
+        float yPos = tableY + 70.0f + i * 25.0f;
+        char scoreText[50];
+        sprintf(scoreText, "%d %s", ctx->highScores[i].score, ctx->highScores[i].name);
+        SDL_RenderDebugText(ctx->renderer, tableX + 30.0f, yPos, scoreText);
+    }
+    
+    // Draw instructions
+    SDL_RenderDebugText(ctx->renderer, tableX + 100.0f, tableY + tableHeight - 40.0f, "PRESS R TO CONTINUE");
 }
 
 void MainLoop(void* arg) {
@@ -852,6 +1008,39 @@ void MainLoop(void* arg) {
                 ctx->flashTimer = 10;
                 for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
                 PlayWav(&ctx->audio, WAV_EXPLOSION, false);
+            }
+            
+            // Handle high score entry
+            if (ctx->state == STATE_HIGHSCORE_ENTRY) {
+                if (event.key.scancode == SDL_SCANCODE_RETURN) {
+                    // Finalize name entry
+                    FinalizeHighScoreEntry(ctx);
+                    ctx->state = STATE_HIGHSCORE_DISPLAY;
+                } else if (event.key.scancode == SDL_SCANCODE_BACKSPACE) {
+                    // Backspace - remove last character
+                    if (ctx->nameEntryCursorPos > 0) {
+                        ctx->nameEntryCursorPos--;
+                        ctx->newHighScoreName[ctx->nameEntryCursorPos] = ' ';
+                    }
+                } else if (event.key.key >= 'a' && event.key.key <= 'z') {
+                    // Letter keys
+                    if (ctx->nameEntryCursorPos < 19) {
+                        ctx->newHighScoreName[ctx->nameEntryCursorPos] = (char)toupper(event.key.key);
+                        ctx->nameEntryCursorPos++;
+                    }
+                }
+            }
+            
+            // Handle high score display dismissal
+            if (ctx->state == STATE_HIGHSCORE_DISPLAY && event.key.scancode == SDL_SCANCODE_R) {
+                ctx->state = STATE_GAMEOVER;
+            }
+            
+            // Handle high score screen dismissal
+            if (ctx->showHighScores && event.key.scancode == SDL_SCANCODE_R) {
+                ctx->showHighScores = false;
+                ResetGame(ctx);
+                ctx->state = STATE_PLAYING;
             }
         }
     }
@@ -1118,10 +1307,18 @@ void MainLoop(void* arg) {
         }
         SDL_SetRenderDrawBlendMode(ctx->renderer, SDL_BLENDMODE_BLEND);
 
-        DrawBlaster(ctx, w, h);
-        DrawHUD(ctx, w, h);
+        if (ctx->state == STATE_PLAYING) {
+            DrawBlaster(ctx, w, h);
+            DrawHUD(ctx, w, h);
+        }
         if (ctx->state == STATE_GAMEOVER) {
             DrawGameOverPrompt(ctx, w, h);
+        }
+        if (ctx->state == STATE_HIGHSCORE_ENTRY) {
+            DrawHighScoreEntryScreen(ctx, w, h);
+        }
+        if (ctx->state == STATE_HIGHSCORE_DISPLAY) {
+            DrawHighScoreDisplayScreen(ctx, w, h);
         }
     }
 
@@ -1185,6 +1382,9 @@ int main(int argc, char* argv[]) {
     ctx.selectedTunnelShape = TUNNEL_CIRCLE;
     ctx.window = SDL_CreateWindow("Tempest SDL3", 800, 800, 0);
     ctx.renderer = SDL_CreateRenderer(ctx.window, NULL);
+    
+    // Load high scores
+    LoadHighScores(&ctx);
     
     SDL_AudioSpec targetSpec = {SDL_AUDIO_F32, 2, 44100};
     ctx.audio.stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &targetSpec, &AudioCallback, &ctx.audio);
