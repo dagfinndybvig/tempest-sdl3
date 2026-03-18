@@ -966,19 +966,10 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
     
     // Draw name entry cursor if editing
     if (isEditing) {
-        float yPos = tableY + 28.0f + ctx->newHighScorePosition * 10.0f; // Scaled
-        float textWidth = 0;
-        for (int j = 0; j < strlen(ctx->newHighScoreName); j++) {
-            textWidth += 8.0f; // Approximate character width
-        }
-        float scoreTextWidth = 0;
-        char scoreStr[20];
-        sprintf(scoreStr, "%d ", ctx->score);
-        for (int j = 0; j < strlen(scoreStr); j++) {
-            scoreTextWidth += 8.0f;
-        }
-        
-        float cursorX = tableX + 12.0f + scoreTextWidth + ctx->nameEntryCursorPos * 8.0f;
+        float yPos = tableY + 48.0f + ctx->newHighScorePosition * 10.0f; // Match score Y position
+        // Cursor position: fixed X + 6-digit score width + cursor position in name
+        // 6 digits * 8 pixels = 48 pixels for score, plus space = 56 pixels total
+        float cursorX = tableX + 30.0f + 48.0f + 8.0f + (ctx->nameEntryCursorPos * 8.0f);
         
         // Draw blinking cursor (white for visibility)
         SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 255);
