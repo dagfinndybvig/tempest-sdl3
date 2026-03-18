@@ -101,7 +101,6 @@ typedef enum {
     STATE_LANDING,
     STATE_PLAYING,
     STATE_GAMEOVER,
-    STATE_HIGHSCORE_ENTRY,
     STATE_HIGHSCORE_DISPLAY
 } GameState;
 
@@ -691,6 +690,7 @@ void ResetGame(AppContext* ctx) {
     ctx->gameSpeedMultiplier = 1.0f;
     ctx->showHighScores = false;
     ctx->nameEntryCursorPos = 0;
+    ctx->newHighScorePosition = -1; // Not in name entry mode
     ApplyTunnelShape(ctx, ctx->selectedTunnelShape);
     for(int i=0; i<MAX_SHOTS; i++) ctx->shots[i].active = false;
     for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
@@ -743,11 +743,11 @@ static void AddHighScore(AppContext* ctx, int score) {
             for (int j = MAX_HIGHSCORES - 1; j > i; j--) {
                 ctx->highScores[j] = ctx->highScores[j - 1];
             }
-            // Set up for name entry
+            // Set up for name entry (now integrated into highscore display)
             ctx->newHighScorePosition = i;
             ctx->nameEntryCursorPos = 0;
             sprintf(ctx->newHighScoreName, "AAA");
-            ctx->state = STATE_HIGHSCORE_ENTRY;
+            ctx->state = STATE_HIGHSCORE_DISPLAY;
             return;
         }
     }
@@ -833,89 +833,90 @@ void DrawHUD(AppContext* ctx, int w, int h) {
     SDL_RenderDebugText(ctx->renderer, hx, hy, hint);
 }
 
-static void DrawHighScoreEntryScreen(AppContext* ctx, int w, int h) {
-    SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 255);
-    
-    // Draw entry screen background
-    float boxWidth = 400.0f;
-    float boxHeight = 200.0f;
-    float boxX = (float)w / 2.0f - boxWidth / 2.0f;
-    float boxY = (float)h / 2.0f - boxHeight / 2.0f;
-    
-    // Draw border
-    SDL_RenderLine(ctx->renderer, boxX, boxY, boxX + boxWidth, boxY);
-    SDL_RenderLine(ctx->renderer, boxX + boxWidth, boxY, boxX + boxWidth, boxY + boxHeight);
-    SDL_RenderLine(ctx->renderer, boxX + boxWidth, boxY + boxHeight, boxX, boxY + boxHeight);
-    SDL_RenderLine(ctx->renderer, boxX, boxY + boxHeight, boxX, boxY);
-    
-    // Draw title
-    char title[50];
-    sprintf(title, "NEW HIGH SCORE: %d", ctx->score);
-    float titleX = boxX + (boxWidth - strlen(title) * 8.0f) / 2.0f;
-    SDL_RenderDebugText(ctx->renderer, titleX, boxY + 30.0f, title);
-    
-    // Draw position (now top 5)
-    char positionText[30];
-    sprintf(positionText, "Position #%d", ctx->newHighScorePosition + 1);
-    float posX = boxX + (boxWidth - strlen(positionText) * 8.0f) / 2.0f;
-    SDL_RenderDebugText(ctx->renderer, posX, boxY + 60.0f, positionText);
-    
-    // Draw name entry
-    char namePrompt[30];
-    sprintf(namePrompt, "Enter your name:");
-    float promptX = boxX + (boxWidth - strlen(namePrompt) * 8.0f) / 2.0f;
-    SDL_RenderDebugText(ctx->renderer, promptX, boxY + 90.0f, namePrompt);
-    
-    // Draw name being entered
-    float nameX = boxX + (boxWidth - strlen(ctx->newHighScoreName) * 8.0f) / 2.0f;
-    SDL_RenderDebugText(ctx->renderer, nameX, boxY + 120.0f, ctx->newHighScoreName);
-    
-    // Draw cursor
-    if ((SDL_GetTicks() / 500) % 2 == 0) {
-        float cursorX = nameX + ctx->nameEntryCursorPos * 8.0f;
-        SDL_RenderLine(ctx->renderer, cursorX, boxY + 120.0f, cursorX, boxY + 130.0f);
-    }
-    
-    // Draw instructions
-    char instructions[50];
-    sprintf(instructions, "Use letters A-Z, ENTER to confirm");
-    float instrX = boxX + (boxWidth - strlen(instructions) * 8.0f) / 2.0f;
-    SDL_RenderDebugText(ctx->renderer, instrX, boxY + 160.0f, instructions);
-}
+
 
 static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
-    SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 255);
-    
     // Clear screen
     SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 0, 255);
     SDL_RenderClear(ctx->renderer);
+    
+    // Use same style as landing page: neon green, scaled up text
+    SDL_SetRenderDrawColor(ctx->renderer, 57, 255, 20, 255); // Neon Green
+    
+    // Set scale for larger text (same as landing page)
+    float oldScaleX, oldScaleY;
+    SDL_GetRenderScale(ctx->renderer, &oldScaleX, &oldScaleY);
+    SDL_SetRenderScale(ctx->renderer, 2.5f, 2.5f);
+    
+    // Draw high score table background (scaled coordinates)
+    float tableWidth = 400.0f / 2.5f; // Adjust for scale
+    float tableHeight = 400.0f / 2.5f;
+    float tableX = (float)w / 2.5f / 2.0f - tableWidth / 2.0f;
+    float tableY = (float)h / 2.5f / 2.0f - tableHeight / 2.0f;
+    
+    // Draw border (white for visibility)
     SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 255);
-    
-    // Draw high score table background
-    float tableWidth = 400.0f;
-    float tableHeight = 400.0f;
-    float tableX = (float)w / 2.0f - tableWidth / 2.0f;
-    float tableY = (float)h / 2.0f - tableHeight / 2.0f;
-    
-    // Draw border
     SDL_RenderLine(ctx->renderer, tableX, tableY, tableX + tableWidth, tableY);
     SDL_RenderLine(ctx->renderer, tableX + tableWidth, tableY, tableX + tableWidth, tableY + tableHeight);
     SDL_RenderLine(ctx->renderer, tableX + tableWidth, tableY + tableHeight, tableX, tableY + tableHeight);
     SDL_RenderLine(ctx->renderer, tableX, tableY + tableHeight, tableX, tableY);
     
-    // Draw title
-    SDL_RenderDebugText(ctx->renderer, tableX + 130.0f, tableY + 30.0f, "HIGH SCORE TABLE");
+    // Draw title in glowing red (same as TEMPEST title)
+    SDL_SetRenderDrawColor(ctx->renderer, 255, 50, 50, 255); // Glowing red
+    float titleX = tableX + (tableWidth - (float)strlen("HIGH SCORE TABLE") * 8.0f) / 2.0f;
+    SDL_RenderDebugText(ctx->renderer, titleX, tableY + 12.0f, "HIGH SCORE TABLE");
+    
+    // Restore neon green for scores
+    SDL_SetRenderDrawColor(ctx->renderer, 57, 255, 20, 255);
     
     // Draw high scores (score before name, no numbering)
+    bool isEditing = false;
     for (int i = 0; i < MAX_HIGHSCORES; i++) {
-        float yPos = tableY + 70.0f + i * 25.0f;
+        float yPos = tableY + 28.0f + i * 10.0f; // Scaled coordinates
         char scoreText[50];
-        sprintf(scoreText, "%d %s", ctx->highScores[i].score, ctx->highScores[i].name);
-        SDL_RenderDebugText(ctx->renderer, tableX + 30.0f, yPos, scoreText);
+        
+        // Check if this is the entry being edited
+        if (i == ctx->newHighScorePosition) {
+            isEditing = true;
+            sprintf(scoreText, "%d %s", ctx->score, ctx->newHighScoreName);
+        } else {
+            sprintf(scoreText, "%d %s", ctx->highScores[i].score, ctx->highScores[i].name);
+        }
+        SDL_RenderDebugText(ctx->renderer, tableX + 12.0f, yPos, scoreText);
     }
     
-    // Draw instructions
-    SDL_RenderDebugText(ctx->renderer, tableX + 100.0f, tableY + tableHeight - 40.0f, "PRESS R TO CONTINUE");
+    // Draw name entry cursor if editing
+    if (isEditing) {
+        float yPos = tableY + 28.0f + ctx->newHighScorePosition * 10.0f; // Scaled
+        float textWidth = 0;
+        for (int j = 0; j < strlen(ctx->newHighScoreName); j++) {
+            textWidth += 8.0f; // Approximate character width
+        }
+        float scoreTextWidth = 0;
+        char scoreStr[20];
+        sprintf(scoreStr, "%d ", ctx->score);
+        for (int j = 0; j < strlen(scoreStr); j++) {
+            scoreTextWidth += 8.0f;
+        }
+        
+        float cursorX = tableX + 12.0f + scoreTextWidth + ctx->nameEntryCursorPos * 8.0f;
+        
+        // Draw blinking cursor (white for visibility)
+        SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 255);
+        if ((SDL_GetTicks() / 500) % 2 == 0) {
+            SDL_RenderLine(ctx->renderer, cursorX, yPos, cursorX, yPos + 4.0f); // Scaled cursor height
+        }
+        SDL_SetRenderDrawColor(ctx->renderer, 57, 255, 20, 255); // Restore neon green
+    }
+    
+    // Draw instructions (simplified - only show when not editing)
+    if (!isEditing) {
+        float instrX = tableX + (tableWidth - (float)strlen("PRESS R TO CONTINUE") * 8.0f) / 2.0f;
+        SDL_RenderDebugText(ctx->renderer, instrX, tableY + tableHeight - 16.0f, "PRESS R TO CONTINUE");
+    }
+    
+    // Restore original scale
+    SDL_SetRenderScale(ctx->renderer, oldScaleX, oldScaleY);
 }
 
 void MainLoop(void* arg) {
@@ -1010,30 +1011,35 @@ void MainLoop(void* arg) {
                 PlayWav(&ctx->audio, WAV_EXPLOSION, false);
             }
             
-            // Handle high score entry
-            if (ctx->state == STATE_HIGHSCORE_ENTRY) {
-                if (event.key.scancode == SDL_SCANCODE_RETURN) {
-                    // Finalize name entry
-                    FinalizeHighScoreEntry(ctx);
-                    ctx->state = STATE_HIGHSCORE_DISPLAY;
-                } else if (event.key.scancode == SDL_SCANCODE_BACKSPACE) {
-                    // Backspace - remove last character
-                    if (ctx->nameEntryCursorPos > 0) {
-                        ctx->nameEntryCursorPos--;
-                        ctx->newHighScoreName[ctx->nameEntryCursorPos] = ' ';
+            // Handle high score display with integrated name entry
+            if (ctx->state == STATE_HIGHSCORE_DISPLAY) {
+                // Check if we're in name entry mode
+                bool isEditing = ctx->newHighScorePosition >= 0 && ctx->newHighScorePosition < MAX_HIGHSCORES;
+                
+                if (isEditing) {
+                    if (event.key.scancode == SDL_SCANCODE_RETURN) {
+                        // Finalize name entry
+                        FinalizeHighScoreEntry(ctx);
+                        ctx->newHighScorePosition = -1; // Clear editing mode
+                    } else if (event.key.scancode == SDL_SCANCODE_BACKSPACE) {
+                        // Backspace - remove last character
+                        if (ctx->nameEntryCursorPos > 0) {
+                            ctx->nameEntryCursorPos--;
+                            ctx->newHighScoreName[ctx->nameEntryCursorPos] = ' ';
+                        }
+                    } else if (event.key.key >= 'a' && event.key.key <= 'z') {
+                        // Letter keys
+                        if (ctx->nameEntryCursorPos < 19) {
+                            ctx->newHighScoreName[ctx->nameEntryCursorPos] = (char)toupper(event.key.key);
+                            ctx->nameEntryCursorPos++;
+                        }
                     }
-                } else if (event.key.key >= 'a' && event.key.key <= 'z') {
-                    // Letter keys
-                    if (ctx->nameEntryCursorPos < 19) {
-                        ctx->newHighScoreName[ctx->nameEntryCursorPos] = (char)toupper(event.key.key);
-                        ctx->nameEntryCursorPos++;
+                } else {
+                    // Not editing, handle normal dismissal
+                    if (event.key.scancode == SDL_SCANCODE_R) {
+                        ctx->state = STATE_GAMEOVER;
                     }
                 }
-            }
-            
-            // Handle high score display dismissal
-            if (ctx->state == STATE_HIGHSCORE_DISPLAY && event.key.scancode == SDL_SCANCODE_R) {
-                ctx->state = STATE_GAMEOVER;
             }
             
             // Handle high score screen dismissal
@@ -1313,9 +1319,6 @@ void MainLoop(void* arg) {
         }
         if (ctx->state == STATE_GAMEOVER) {
             DrawGameOverPrompt(ctx, w, h);
-        }
-        if (ctx->state == STATE_HIGHSCORE_ENTRY) {
-            DrawHighScoreEntryScreen(ctx, w, h);
         }
         if (ctx->state == STATE_HIGHSCORE_DISPLAY) {
             DrawHighScoreDisplayScreen(ctx, w, h);
