@@ -960,7 +960,10 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
         } else {
             sprintf(scoreText, "%d %s", ctx->highScores[i].score, ctx->highScores[i].name);
         }
-        SDL_RenderDebugText(ctx->renderer, tableX + 12.0f, yPos, scoreText);
+        // Right-align the text (calculate X position from right margin)
+        float textWidth = strlen(scoreText) * 8.0f; // Approximate character width
+        float scoreX = tableX + tableWidth - textWidth - 12.0f; // Right-aligned with margin
+        SDL_RenderDebugText(ctx->renderer, scoreX, yPos, scoreText);
     }
     
     // Draw name entry cursor if editing
