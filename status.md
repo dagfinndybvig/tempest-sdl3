@@ -26,6 +26,13 @@ The project is currently a functional 3D vector-style engine prototype built wit
 - **Scoring & Lives**:
   - Player starts with 3 lives. Losing a life triggers a "Game Over" when reaching zero.
   - Destroying enemies adds 100 points to the score.
+- **Highscore System**:
+  - **Persistent Storage**: Native version uses file I/O (`highscores.txt`), web version uses localStorage with JSON.
+  - **Top 5 Scores**: Displays only the highest 5 scores in descending order.
+  - **Integrated Name Entry**: Players enter names directly in the highscore table.
+  - **Default Values**: 500, 400, 300, 200, 100 points with name "PROSPERO".
+  - **Visual Design**: Glowing red heading, neon green scores, large font matching landing page style.
+  - **Game Flow**: Game over → Highscore display (with name entry) → Game over screen.
 - **Progressive Difficulty**:
   - **Dynamic Geometry**: Every 8 enemies destroyed triggers a random tunnel geometry change.
   - **Speed Increase**: Game speed increases by 2% with each enemy kill (capped at 2.5x normal speed).
@@ -83,3 +90,7 @@ For explosions when enemies are hit, implement a simple particle system:
 - [x] Implement game speed multiplier that increases with each kill.
 - [ ] Add "Spikers" that leave trails behind them.
 - [x] Implement the "Superzapper" (screen-clear ability).
+- [x] Implement persistent highscore system with file I/O (native) and localStorage (web).
+- [x] Add integrated name entry directly in highscore display.
+- [x] Update visual design to match landing page style (glowing red heading, neon green scores).
+- [x] Set reasonable default high scores (500-100 points with "PROSPERO" name).

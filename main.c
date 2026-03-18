@@ -714,6 +714,63 @@ static void ContinueGameWithSelectedGeometry(AppContext* ctx) {
 }
 
 static void LoadHighScores(AppContext* ctx) {
+#ifdef __EMSCRIPTEN__
+    // Web version - use localStorage
+    char* json = (char*)EM_ASM_INT({
+        return localStorage.getItem('tempestHighScores') || '';
+    });
+    
+    if (json && strlen(json) > 0) {
+        // Simple JSON parser for our specific format
+        char* ptr = json;
+        int scoreIndex = 0;
+        
+        // Skip opening bracket
+        if (*ptr == '[') ptr++;
+        
+        while (*ptr && scoreIndex < MAX_HIGHSCORES) {
+            // Skip whitespace and commas
+            while (*ptr && (*ptr == ' ' || *ptr == ',' || *ptr == '\n' || *ptr == '\r')) ptr++;
+            
+            if (*ptr == '{') {
+                ptr++; // Skip opening brace
+                
+                // Extract name
+                char* nameStart = strstr(ptr, "\"name\":");
+                if (nameStart) {
+                    nameStart += 8; // Skip "name":"
+                    char* nameEnd = strchr(nameStart, '"');
+                    if (nameEnd) {
+                        strncpy(ctx->highScores[scoreIndex].name, nameStart, nameEnd - nameStart);
+                        ctx->highScores[scoreIndex].name[nameEnd - nameStart] = '\0';
+                        ptr = nameEnd + 1;
+                    }
+                }
+                
+                // Extract score
+                char* scoreStart = strstr(ptr, "\"score\":");
+                if (scoreStart) {
+                    scoreStart += 8; // Skip "score":
+                    ctx->highScores[scoreIndex].score = atoi(scoreStart);
+                    ptr = scoreStart;
+                    while (*ptr && *ptr != '}' && *ptr != ',') ptr++;
+                }
+                
+                scoreIndex++;
+            } else {
+                break;
+            }
+        }
+        free(json);
+    } else {
+        // Fallback to default scores
+        for (int i = 0; i < MAX_HIGHSCORES; i++) {
+            sprintf(ctx->highScores[i].name, "PROSPERO");
+            ctx->highScores[i].score = 500 - (i * 100);
+        }
+    }
+#else
+    // Native version - use file I/O
     FILE* f = fopen("highscores.txt", "rb");
     if (f) {
         fread(ctx->highScores, sizeof(HighScoreEntry), MAX_HIGHSCORES, f);
@@ -725,14 +782,33 @@ static void LoadHighScores(AppContext* ctx) {
             ctx->highScores[i].score = (MAX_HIGHSCORES - i) * 1000;
         }
     }
+#endif
 }
 
 static void SaveHighScores(AppContext* ctx) {
+#ifdef __EMSCRIPTEN__
+    // Web version - use localStorage with JSON serialization
+    char json[512];
+    sprintf(json, "[");
+    for (int i = 0; i < MAX_HIGHSCORES; i++) {
+        if (i > 0) strcat(json, ",");
+        char entry[128];
+        sprintf(entry, "{\"name\":\"%s\",\"score\":%d}", ctx->highScores[i].name, ctx->highScores[i].score);
+        strcat(json, entry);
+    }
+    strcat(json, "]");
+    
+    EM_ASM_({
+        localStorage.setItem('tempestHighScores', UTF8ToString($0));
+    }, json);
+#else
+    // Native version - use file I/O
     FILE* f = fopen("highscores.txt", "wb");
     if (f) {
         fwrite(ctx->highScores, sizeof(HighScoreEntry), MAX_HIGHSCORES, f);
         fclose(f);
     }
+#endif
 }
 
 static void AddHighScore(AppContext* ctx, int score) {

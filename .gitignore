@@ -1,1 +1,5 @@
 tempest
+highscores.txt
+*.pid
+*.log
+build/
