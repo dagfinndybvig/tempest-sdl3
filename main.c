@@ -778,8 +778,8 @@ static void LoadHighScores(AppContext* ctx) {
     } else {
         // Initialize with default high scores (top 5)
         for (int i = 0; i < MAX_HIGHSCORES; i++) {
-            sprintf(ctx->highScores[i].name, "AAA");
-            ctx->highScores[i].score = (MAX_HIGHSCORES - i) * 1000;
+            sprintf(ctx->highScores[i].name, "PROSPERO");
+            ctx->highScores[i].score = 500 - (i * 100);
         }
     }
 #endif
