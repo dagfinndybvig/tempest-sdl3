@@ -925,15 +925,15 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
     SDL_GetRenderScale(ctx->renderer, &oldScaleX, &oldScaleY);
     SDL_SetRenderScale(ctx->renderer, 2.5f, 2.5f);
     
-    // Use full window for high score display
-    float tableX = 10.0f; // Small margin
-    float tableY = 10.0f; // Small margin
+    // Center high score table on screen
+    float tableX = ((float)w / 2.5f - 200.0f) / 2.0f; // Center horizontally
+    float tableY = 10.0f; // Small top margin
     
     // Border removed to allow full window usage for high scores
     
     // Draw title in glowing red (same as TEMPEST title)
     SDL_SetRenderDrawColor(ctx->renderer, 255, 50, 50, 255); // Glowing red
-    float titleX = tableX;
+    float titleX = tableX + (200.0f - (float)strlen("HIGH SCORE TABLE") * 8.0f) / 2.0f;
     SDL_RenderDebugText(ctx->renderer, titleX, tableY + 12.0f, "HIGH SCORE TABLE");
     
     // Restore neon green for scores
@@ -974,7 +974,8 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
     
     // Draw instructions (simplified - only show when not editing)
     if (!isEditing) {
-        SDL_RenderDebugText(ctx->renderer, tableX, tableY + 150.0f, "PRESS R TO CONTINUE");
+        float instrX = tableX + (200.0f - (float)strlen("PRESS R TO CONTINUE") * 8.0f) / 2.0f;
+        SDL_RenderDebugText(ctx->renderer, instrX, tableY + 150.0f, "PRESS R TO CONTINUE");
     }
     
     // Restore original scale
