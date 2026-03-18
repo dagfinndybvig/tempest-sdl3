@@ -947,9 +947,10 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
     SDL_SetRenderDrawColor(ctx->renderer, 57, 255, 20, 255);
     
     // Draw high scores (score before name, no numbering)
+    // Add two line breaks after title (increase initial Y position)
     bool isEditing = false;
     for (int i = 0; i < MAX_HIGHSCORES; i++) {
-        float yPos = tableY + 28.0f + i * 10.0f; // Scaled coordinates
+        float yPos = tableY + 48.0f + i * 10.0f; // Increased from 28.0f to 48.0f for spacing
         char scoreText[50];
         
         // Check if this is the entry being edited
