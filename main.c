@@ -954,7 +954,7 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
             sprintf(scoreText, "%6d %s", ctx->highScores[i].score, ctx->highScores[i].name);
         }
         // Draw at fixed position (scores right-aligned within 6-digit field, names left-aligned)
-        SDL_RenderDebugText(ctx->renderer, tableX + 10.0f, yPos, scoreText); // Moved 20 pixels left
+        SDL_RenderDebugText(ctx->renderer, tableX + 20.0f, yPos, scoreText); // Moved 10 pixels right
     }
     
     // Draw name entry cursor if editing
@@ -962,7 +962,7 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
         float yPos = tableY + 48.0f + ctx->newHighScorePosition * 10.0f; // Match score Y position
         // Cursor position: fixed X + 6-digit score width + cursor position in name
         // 6 digits * 8 pixels = 48 pixels for score, plus space = 56 pixels total
-        float cursorX = tableX + 10.0f + 48.0f + 8.0f + (ctx->nameEntryCursorPos * 8.0f); // Moved 20 pixels left
+        float cursorX = tableX + 20.0f + 48.0f + 8.0f + (ctx->nameEntryCursorPos * 8.0f); // Moved 10 pixels right
         
         // Draw blinking cursor (white for visibility)
         SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 255);
