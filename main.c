@@ -953,17 +953,15 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
         float yPos = tableY + 48.0f + i * 10.0f; // Increased from 28.0f to 48.0f for spacing
         char scoreText[50];
         
-        // Check if this is the entry being edited
+        // Format score with fixed width (6 digits) and name
         if (i == ctx->newHighScorePosition) {
             isEditing = true;
-            sprintf(scoreText, "%d %s", ctx->score, ctx->newHighScoreName);
+            sprintf(scoreText, "%6d %s", ctx->score, ctx->newHighScoreName);
         } else {
-            sprintf(scoreText, "%d %s", ctx->highScores[i].score, ctx->highScores[i].name);
+            sprintf(scoreText, "%6d %s", ctx->highScores[i].score, ctx->highScores[i].name);
         }
-        // Right-align the text (calculate X position from right margin)
-        float textWidth = strlen(scoreText) * 8.0f; // Approximate character width
-        float scoreX = tableX + tableWidth - textWidth - 12.0f; // Right-aligned with margin
-        SDL_RenderDebugText(ctx->renderer, scoreX, yPos, scoreText);
+        // Draw at fixed position (scores right-aligned within 6-digit field, names left-aligned)
+        SDL_RenderDebugText(ctx->renderer, tableX + 30.0f, yPos, scoreText);
     }
     
     // Draw name entry cursor if editing
