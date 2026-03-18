@@ -446,11 +446,10 @@ void PlayWav(AudioContext* ctx, WavType type, bool loop) {
     if (type >= NUM_WAVS) return;
     if (ctx->wavs[type].data == NULL) return;
 
-    if (loop) {
-        for (int i = 0; i < MAX_ACTIVE_SOUNDS; i++) {
-            if (ctx->activeSounds[i].active && ctx->activeSounds[i].wavIndex == (int)type) {
-                return;
-            }
+    // Prevent duplicate playback for any sound type (looping or not)
+    for (int i = 0; i < MAX_ACTIVE_SOUNDS; i++) {
+        if (ctx->activeSounds[i].active && ctx->activeSounds[i].wavIndex == (int)type) {
+            return;
         }
     }
 
