@@ -373,6 +373,16 @@ static void DrawGameOverPrompt(AppContext* ctx, int w, int h) {
     float promptWidth = MeasureGlyphStringWidth(prompt, promptSize, promptSpacing);
     SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 200);
     DrawGlyphString(ctx->renderer, prompt, ((float)w - promptWidth) * 0.5f, h * 0.65f, promptSize, promptSpacing);
+
+    // Touch controls message (web only)
+#ifdef __EMSCRIPTEN__
+    const char* touchPrompt = "OR TAP TO RESTART WITH TOUCH CONTROLS";
+    float touchPromptSize = 20.0f;
+    float touchPromptSpacing = touchPromptSize * 0.25f;
+    float touchPromptWidth = MeasureGlyphStringWidth(touchPrompt, touchPromptSize, touchPromptSpacing);
+    SDL_SetRenderDrawColor(ctx->renderer, 200, 200, 50, 200);
+    DrawGlyphString(ctx->renderer, touchPrompt, ((float)w - touchPromptWidth) * 0.5f, h * 0.72f, touchPromptSize, touchPromptSpacing);
+#endif
 }
 
 void PlaySound(AudioContext* ctx, int type, float freqStart, float freqEnd, float duration, float volume);
