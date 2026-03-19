@@ -1098,10 +1098,6 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
         SDL_RenderDebugText(ctx->renderer, confirmTextX, confirmTextY, confirmText);
 #else
         // Touch mode: Automatically use "PLAYER" with touch confirmation
-        SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 220);
-        const char* instr = "NAME SET TO PLAYER";
-        SDL_RenderDebugText(ctx->renderer, (w - strlen(instr) * 8) * 0.5f, h * 0.55f, instr);
-        
         // Automatically set name to "PLAYER" for mobile
         if (ctx->newHighScoreName[0] == '\0' || ctx->newHighScoreName[0] == ' ') {
             strcpy(ctx->newHighScoreName, "PLAYER");
