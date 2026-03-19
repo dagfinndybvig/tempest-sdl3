@@ -141,6 +141,7 @@ typedef struct {
     bool touchSuperzapperActive;
     bool showTouchControls;
     bool highscoreEntryPending; // Track if we have a pending highscore entry
+    bool touchOnlyMode; // True if running on a touch-only device
 } AppContext;
 
 typedef struct {
@@ -1098,10 +1099,17 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
         SDL_RenderDebugText(ctx->renderer, confirmTextX, confirmTextY, confirmText);
 #else
         // Touch mode: Automatically use "PLAYER" with touch confirmation
-        // Automatically set name to "PLAYER" for mobile
+        // Set name based on input mode
         if (ctx->newHighScoreName[0] == '\0' || ctx->newHighScoreName[0] == ' ') {
-            strcpy(ctx->newHighScoreName, "PLAYER");
-            ctx->nameEntryCursorPos = 6;
+            if (ctx->touchOnlyMode) {
+                // Touch-only devices: auto-set and lock to "PLAYER"
+                strcpy(ctx->newHighScoreName, "PLAYER");
+                ctx->nameEntryCursorPos = 6;
+            } else {
+                // Browser/keyboard mode: start with "PLAYER" but allow editing
+                strcpy(ctx->newHighScoreName, "PLAYER");
+                ctx->nameEntryCursorPos = 6;
+            }
         }
         
         // Draw single confirmation button for touch
@@ -1729,6 +1737,9 @@ int main(int argc, char* argv[]) {
     // Initialize touch controls for web version
 #ifdef __EMSCRIPTEN__
     ctx.showTouchControls = true;
+    // For now, assume web version might have keyboard, so don't force touch-only mode
+    // In future, could detect actual touch capability
+    ctx.touchOnlyMode = false;
 #endif
     
     // Load high scores
