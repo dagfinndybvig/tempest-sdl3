@@ -1052,52 +1052,43 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
         SDL_RenderDebugText(ctx->renderer, tapInstrX, tableY + 160.0f, "OR TAP TO CONTINUE");
 #endif
     } else {
-        // Draw virtual keyboard for touch name entry (web only)
+        // Draw simple name selection for touch devices (web only)
 #ifdef __EMSCRIPTEN__
         SDL_SetRenderScale(ctx->renderer, 1.0f, 1.0f);
         SDL_SetRenderDrawColor(ctx->renderer, 50, 50, 100, 180);
         
-        // Draw keyboard background
-        SDL_FRect keyboardBg = {w * 0.2f, h * 0.6f, w * 0.6f, h * 0.3f};
-        SDL_RenderFillRect(ctx->renderer, &keyboardBg);
-        
-        // Draw character buttons
-        SDL_SetRenderDrawColor(ctx->renderer, 200, 200, 255, 220);
-        const char* characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-        
-        float startX = w * 0.22f;
-        float startY = h * 0.62f;
-        float buttonSize = w * 0.06f;
-        float spacing = w * 0.01f;
-        
-        for (int i = 0; i < 36; i++) {
-            if (characters[i] == '\0') break;
-            
-            float x = startX + (i % 6) * (buttonSize + spacing);
-            float y = startY + (i / 6) * (buttonSize + spacing);
-            
-            SDL_FRect button = {x, y, buttonSize, buttonSize};
-            SDL_RenderFillRect(ctx->renderer, &button);
-            
-            // Draw character
-            SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 0, 255);
-            char charStr[2] = {characters[i], '\0'};
-            float textX = x + buttonSize * 0.35f;
-            float textY = y + buttonSize * 0.35f;
-            SDL_RenderDebugText(ctx->renderer, textX, textY, charStr);
-        }
-        
-        // Draw backspace button
-        SDL_SetRenderDrawColor(ctx->renderer, 255, 100, 100, 220);
-        SDL_FRect backspaceBtn = {startX + 5 * (buttonSize + spacing), startY + 5 * (buttonSize + spacing), buttonSize, buttonSize};
-        SDL_RenderFillRect(ctx->renderer, &backspaceBtn);
-        SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 0, 255);
-        SDL_RenderDebugText(ctx->renderer, backspaceBtn.x + buttonSize * 0.2f, backspaceBtn.y + buttonSize * 0.35f, "←");
+        // Draw selection background
+        SDL_FRect selectBg = {w * 0.3f, h * 0.6f, w * 0.4f, h * 0.2f};
+        SDL_RenderFillRect(ctx->renderer, &selectBg);
         
         // Draw instruction
         SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 220);
-        const char* instr = "TAP CHARACTERS TO ENTER NAME";
+        const char* instr = "CHOOSE YOUR NAME";
         SDL_RenderDebugText(ctx->renderer, (w - strlen(instr) * 8) * 0.5f, h * 0.55f, instr);
+        
+        // Draw 4 name buttons
+        SDL_SetRenderDrawColor(ctx->renderer, 100, 150, 255, 220);
+        const char* names[4] = {"PLAYER 1", "PLAYER 2", "PLAYER 3", "PLAYER 4"};
+        
+        float buttonWidth = w * 0.18f;
+        float buttonHeight = h * 0.12f;
+        float startX = w * 0.32f;
+        float startY = h * 0.62f;
+        float spacing = w * 0.02f;
+        
+        for (int i = 0; i < 4; i++) {
+            float x = startX + i * (buttonWidth + spacing);
+            float y = startY;
+            
+            SDL_FRect button = {x, y, buttonWidth, buttonHeight};
+            SDL_RenderFillRect(ctx->renderer, &button);
+            
+            // Draw name text
+            SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 0, 255);
+            float textX = x + (buttonWidth - strlen(names[i]) * 8) * 0.5f;
+            float textY = y + (buttonHeight - 8) * 0.5f;
+            SDL_RenderDebugText(ctx->renderer, textX, textY, names[i]);
+        }
         
         SDL_SetRenderScale(ctx->renderer, 1.5f, 1.5f);
 #endif
@@ -1172,37 +1163,24 @@ void MainLoop(void* arg) {
             int screenX = (int)(touchX * w);
             int screenY = (int)(touchY * h);
             
-            // Handle virtual keyboard in highscore name entry mode
+            // Handle simple name selection in highscore name entry mode
             if (ctx->state == STATE_HIGHSCORE_DISPLAY) {
                 bool isEditing = ctx->newHighScorePosition >= 0 && ctx->newHighScorePosition < MAX_HIGHSCORES;
                 if (isEditing) {
-                    // Check if touch is in virtual keyboard area
-                    if (screenY > h * 0.6 && screenY < h * 0.9 && screenX > w * 0.2 && screenX < w * 0.8) {
-                        // Calculate which character was touched
-                        float buttonSize = w * 0.06f;
-                        float spacing = w * 0.01f;
-                        float startX = w * 0.22f;
-                        float startY = h * 0.62f;
+                    // Check if touch is in name selection area
+                    if (screenY > h * 0.6 && screenY < h * 0.8 && screenX > w * 0.3 && screenX < w * 0.7) {
+                        // Calculate which name button was touched
+                        float buttonWidth = w * 0.18f;
+                        float spacing = w * 0.02f;
+                        float startX = w * 0.32f;
                         
-                        int col = (int)((screenX - startX) / (buttonSize + spacing));
-                        int row = (int)((screenY - startY) / (buttonSize + spacing));
-                        int index = row * 6 + col;
+                        int selected = (int)((screenX - startX) / (buttonWidth + spacing));
                         
-                        // Check if backspace button (last position)
-                        if (row == 5 && col == 5) {
-                            // Backspace - remove last character
-                            if (ctx->nameEntryCursorPos > 0) {
-                                ctx->nameEntryCursorPos--;
-                                ctx->newHighScoreName[ctx->nameEntryCursorPos] = ' ';
-                            }
-                        } else if (index >= 0 && index < 36) {
-                            // Add character to name (if there's space)
-                            const char* characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-                            if (ctx->nameEntryCursorPos < 19) {
-                                ctx->newHighScoreName[ctx->nameEntryCursorPos] = characters[index];
-                                ctx->nameEntryCursorPos++;
-                                ctx->newHighScoreName[ctx->nameEntryCursorPos] = '\0';
-                            }
+                        // Set the selected name
+                        if (selected >= 0 && selected < 4) {
+                            const char* names[4] = {"PLAYER 1", "PLAYER 2", "PLAYER 3", "PLAYER 4"};
+                            strcpy(ctx->newHighScoreName, names[selected]);
+                            ctx->nameEntryCursorPos = strlen(names[selected]);
                         }
                     }
                 }
