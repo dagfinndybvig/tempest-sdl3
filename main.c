@@ -1071,7 +1071,16 @@ void MainLoop(void* arg) {
 #endif
                 ctx->state = STATE_PLAYING;
                 ResetGame(ctx);
-            } else {
+            }
+            // On game over, tap restarts with touch controls
+            else if (ctx->state == STATE_GAMEOVER) {
+#ifdef __EMSCRIPTEN__
+                ctx->showTouchControls = true;
+#endif
+                ContinueGameWithSelectedGeometry(ctx);
+                ctx->state = STATE_PLAYING;
+            }
+            else {
                 // During gameplay, toggle touch controls (web only)
 #ifdef __EMSCRIPTEN__
                 ctx->showTouchControls = !ctx->showTouchControls;
