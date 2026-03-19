@@ -530,7 +530,10 @@ static void TriggerGameOverShape(AppContext* ctx) {
     PlayWav(&ctx->audio, WAV_EXPLOSION, false);
     
     // Check if this score qualifies for high scores
+    printf("DEBUG: About to check highscore for score: %d\n", ctx->score);
     AddHighScore(ctx, ctx->score);
+    printf("DEBUG: After AddHighScore, state = %d (LANDING=%d, PLAYING=%d, GAMEOVER=%d, HIGHSCORE=%d)\n", 
+           ctx->state, STATE_LANDING, STATE_PLAYING, STATE_GAMEOVER, STATE_HIGHSCORE_DISPLAY);
 }
 
 void AudioCallback(void* userdata, SDL_AudioStream* stream, int len, int total_amount) {
