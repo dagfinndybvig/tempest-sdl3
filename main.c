@@ -1045,6 +1045,12 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
     if (!isEditing) {
         float instrX = tableX + (200.0f - (float)strlen("PRESS R TO CONTINUE") * 8.0f) / 2.0f;
         SDL_RenderDebugText(ctx->renderer, instrX, tableY + 150.0f, "PRESS R TO CONTINUE");
+        
+        // Add tap instruction for web version
+#ifdef __EMSCRIPTEN__
+        float tapInstrX = tableX + (200.0f - (float)strlen("OR TAP TO CONTINUE") * 8.0f) / 2.0f;
+        SDL_RenderDebugText(ctx->renderer, tapInstrX, tableY + 160.0f, "OR TAP TO CONTINUE");
+#endif
     }
     
     // Restore original scale
@@ -1090,6 +1096,10 @@ void MainLoop(void* arg) {
 #endif
                 ContinueGameWithSelectedGeometry(ctx);
                 ctx->state = STATE_PLAYING;
+            }
+            // On highscore screen, tap returns to game over (then player can restart)
+            else if (ctx->state == STATE_HIGHSCORE_DISPLAY) {
+                ctx->state = STATE_GAMEOVER;
             }
             else {
                 // During gameplay, toggle touch controls (web only)
