@@ -427,7 +427,7 @@ static void DrawLandingPage(AppContext* ctx, int w, int h) {
     const char* touchMessage = NULL;
 #ifdef __EMSCRIPTEN__
     if (!ctx->showTouchControls) {
-        touchMessage = "OR TAP SCREEN FOR TOUCH CONTROLS";
+        touchMessage = "OR TAP TO START WITH TOUCH CONTROLS";
     } else {
         touchMessage = "TOUCH CONTROLS ACTIVE";
     }
