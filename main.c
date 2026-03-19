@@ -140,6 +140,7 @@ typedef struct {
     bool touchFireActive;
     bool touchSuperzapperActive;
     bool showTouchControls;
+    bool highscoreEntryPending; // Track if we have a pending highscore entry
 } AppContext;
 
 typedef struct {
@@ -850,6 +851,13 @@ static void SaveHighScores(AppContext* ctx) {
 }
 
 static void AddHighScore(AppContext* ctx, int score) {
+    // Check if we have a pending highscore entry from before
+    if (ctx->highscoreEntryPending) {
+        // Re-use the existing highscore entry
+        ctx->state = STATE_HIGHSCORE_DISPLAY;
+        return;
+    }
+    
     // Check if score qualifies for high score table
     for (int i = 0; i < MAX_HIGHSCORES; i++) {
         if (score > ctx->highScores[i].score) {
@@ -881,6 +889,9 @@ static void FinalizeHighScoreEntry(AppContext* ctx) {
     // Add the finalized score to the high score table
     strcpy(ctx->highScores[ctx->newHighScorePosition].name, ctx->newHighScoreName);
     ctx->highScores[ctx->newHighScorePosition].score = ctx->score;
+    
+    // Mark that we have a pending highscore entry (for if player gets another highscore)
+    ctx->highscoreEntryPending = true;
     
     // Save high scores to file
     SaveHighScores(ctx);
@@ -1158,6 +1169,8 @@ void MainLoop(void* arg) {
             }
             // On highscore screen, tap returns to game over (then player can restart)
             else if (ctx->state == STATE_HIGHSCORE_DISPLAY) {
+                // Clear the pending flag when leaving highscore entry
+                ctx->highscoreEntryPending = false;
                 ctx->state = STATE_GAMEOVER;
             }
             else {
