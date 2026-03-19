@@ -460,11 +460,11 @@ static void DrawLandingPage(AppContext* ctx, int w, int h) {
     // Dynamic sound toggle hint
     SDL_SetRenderScale(ctx->renderer, 1.5f, 1.5f);
     SDL_SetRenderDrawColor(ctx->renderer, 150, 150, 150, 200);
-    const char* hint = "CLICK TO TOGGLE SOUND";
+    const char* hint = "S TO TOGGLE SOUND";
     if (ctx->audio.stream && SDL_AudioStreamDevicePaused(ctx->audio.stream)) {
-        hint = "CLICK TO ENABLE SOUND";
+        hint = "S TO ENABLE SOUND";
     } else {
-        hint = "CLICK TO MUTE SOUND";
+        hint = "S TO MUTE SOUND";
     }
     float hx = ((float)w / 1.5f - (float)strlen(hint) * 8.0f) * 0.5f;
     float hy = (float)h * 0.95f / 1.5f;
@@ -925,11 +925,11 @@ void DrawHUD(AppContext* ctx, int w, int h) {
     // Dynamic sound toggle hint in HUD (small, at bottom)
     SDL_SetRenderScale(ctx->renderer, 1.0f, 1.0f);
     SDL_SetRenderDrawColor(ctx->renderer, 100, 100, 100, 150);
-    const char* hint = "CLICK TO TOGGLE SOUND";
+    const char* hint = "S TO TOGGLE SOUND";
     if (ctx->audio.stream && SDL_AudioStreamDevicePaused(ctx->audio.stream)) {
-        hint = "CLICK TO ENABLE SOUND";
+        hint = "S TO ENABLE SOUND";
     } else {
-        hint = "CLICK TO MUTE SOUND";
+        hint = "S TO MUTE SOUND";
     }
     // Draw at bottom right, small
     float hx = (float)w - (float)strlen(hint) * 8.0f - 10.0f;
@@ -1072,20 +1072,10 @@ void MainLoop(void* arg) {
                 ctx->state = STATE_PLAYING;
                 ResetGame(ctx);
             } else {
-                // Normal sound toggle behavior during gameplay
-                if (ctx->audio.stream) {
-                    static bool gestureReceived = false;
-                    if (!gestureReceived) {
-                        SDL_ResumeAudioStreamDevice(ctx->audio.stream);
-                        gestureReceived = true;
-                    } else {
-                        if (SDL_AudioStreamDevicePaused(ctx->audio.stream)) {
-                            SDL_ResumeAudioStreamDevice(ctx->audio.stream);
-                        } else {
-                            SDL_PauseAudioStreamDevice(ctx->audio.stream);
-                        }
-                    }
-                }
+                // During gameplay, toggle touch controls (web only)
+#ifdef __EMSCRIPTEN__
+                ctx->showTouchControls = !ctx->showTouchControls;
+#endif
             }
         }
 
@@ -1179,6 +1169,15 @@ void MainLoop(void* arg) {
                 ctx->flashTimer = 10;
                 for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
                 PlayWav(&ctx->audio, WAV_EXPLOSION, false);
+            }
+            
+            // S key toggles sound (works in both native and web)
+            if (event.key.scancode == SDL_SCANCODE_S && ctx->audio.stream) {
+                if (SDL_AudioStreamDevicePaused(ctx->audio.stream)) {
+                    SDL_ResumeAudioStreamDevice(ctx->audio.stream);
+                } else {
+                    SDL_PauseAudioStreamDevice(ctx->audio.stream);
+                }
             }
             
             // Handle high score display with integrated name entry
