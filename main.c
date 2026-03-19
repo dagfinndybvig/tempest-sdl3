@@ -423,6 +423,16 @@ static void DrawLandingPage(AppContext* ctx, int w, int h) {
         "0-3 FOR TUNNELS",
     };
     
+    // Touch controls activation message (web only)
+    const char* touchMessage = NULL;
+#ifdef __EMSCRIPTEN__
+    if (!ctx->showTouchControls) {
+        touchMessage = "TAP SCREEN FOR TOUCH CONTROLS";
+    } else {
+        touchMessage = "TOUCH CONTROLS ACTIVE - TAP TO START";
+    }
+#endif
+    
     // Set a scale to make debug text larger
     float oldScaleX, oldScaleY;
     SDL_GetRenderScale(ctx->renderer, &oldScaleX, &oldScaleY);
@@ -459,6 +469,17 @@ static void DrawLandingPage(AppContext* ctx, int w, int h) {
     float hx = ((float)w / 1.5f - (float)strlen(hint) * 8.0f) * 0.5f;
     float hy = (float)h * 0.95f / 1.5f;
     SDL_RenderDebugText(ctx->renderer, hx, hy, hint);
+    
+    // Touch controls activation message (web only)
+#ifdef __EMSCRIPTEN__
+    if (touchMessage) {
+        SDL_SetRenderDrawColor(ctx->renderer, 200, 200, 50, 220);
+        float tx = ((float)w / 1.5f - (float)strlen(touchMessage) * 8.0f) * 0.5f;
+        float ty = (float)h * 0.90f / 1.5f;
+        SDL_RenderDebugText(ctx->renderer, tx, ty, touchMessage);
+    }
+#endif
+    
     SDL_SetRenderScale(ctx->renderer, 1.0f, 1.0f);
 }
 
@@ -1043,16 +1064,24 @@ void MainLoop(void* arg) {
 #endif
         }
         if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-            if (ctx->audio.stream) {
-                static bool gestureReceived = false;
-                if (!gestureReceived) {
-                    SDL_ResumeAudioStreamDevice(ctx->audio.stream);
-                    gestureReceived = true;
-                } else {
-                    if (SDL_AudioStreamDevicePaused(ctx->audio.stream)) {
+            // On landing page, tap activates touch controls
+            if (ctx->state == STATE_LANDING) {
+#ifdef __EMSCRIPTEN__
+                ctx->showTouchControls = true;
+#endif
+            } else {
+                // Normal sound toggle behavior during gameplay
+                if (ctx->audio.stream) {
+                    static bool gestureReceived = false;
+                    if (!gestureReceived) {
                         SDL_ResumeAudioStreamDevice(ctx->audio.stream);
+                        gestureReceived = true;
                     } else {
-                        SDL_PauseAudioStreamDevice(ctx->audio.stream);
+                        if (SDL_AudioStreamDevicePaused(ctx->audio.stream)) {
+                            SDL_ResumeAudioStreamDevice(ctx->audio.stream);
+                        } else {
+                            SDL_PauseAudioStreamDevice(ctx->audio.stream);
+                        }
                     }
                 }
             }
@@ -1092,7 +1121,12 @@ void MainLoop(void* arg) {
 #endif
 
         if (event.type == SDL_EVENT_KEY_DOWN) {
-            if (ctx->state == STATE_LANDING) {                ctx->state = STATE_PLAYING;
+            if (ctx->state == STATE_LANDING) {
+                // Keyboard start disables touch controls
+#ifdef __EMSCRIPTEN__
+                ctx->showTouchControls = false;
+#endif
+                ctx->state = STATE_PLAYING;
                 ResetGame(ctx);
                 continue;
             }
