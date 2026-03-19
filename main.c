@@ -1171,8 +1171,8 @@ void MainLoop(void* arg) {
                 PlayWav(&ctx->audio, WAV_EXPLOSION, false);
             }
             
-            // S key toggles sound (works in both native and web)
-            if (event.key.scancode == SDL_SCANCODE_S && ctx->audio.stream) {
+            // S key toggles sound (works in both native and web) - case insensitive
+            if ((event.key.scancode == SDL_SCANCODE_S || event.key.key == 's' || event.key.key == 'S') && ctx->audio.stream) {
                 if (SDL_AudioStreamDevicePaused(ctx->audio.stream)) {
                     SDL_ResumeAudioStreamDevice(ctx->audio.stream);
                 } else {
