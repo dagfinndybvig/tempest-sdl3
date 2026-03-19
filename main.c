@@ -861,7 +861,14 @@ static void AddHighScore(AppContext* ctx, int score) {
             ctx->newHighScorePosition = i;
             ctx->nameEntryCursorPos = 0;
             memset(ctx->newHighScoreName, 0, sizeof(ctx->newHighScoreName));
+#ifdef __EMSCRIPTEN__
+            // Auto-set to "PLAYER" for touch devices
+            sprintf(ctx->newHighScoreName, "PLAYER");
+            ctx->nameEntryCursorPos = 6;
+#else
+            // Start with "AAA" for keyboard editing
             sprintf(ctx->newHighScoreName, "AAA");
+#endif
             ctx->state = STATE_HIGHSCORE_DISPLAY;
             return;
         }
