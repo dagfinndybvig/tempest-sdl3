@@ -1061,38 +1061,22 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
         SDL_FRect selectBg = {w * 0.3f, h * 0.6f, w * 0.4f, h * 0.2f};
         SDL_RenderFillRect(ctx->renderer, &selectBg);
         
-        // Draw instruction
+        // Draw instruction - now automatically uses "PLAYER"
         SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 220);
-        const char* instr = "CHOOSE YOUR NAME";
+        const char* instr = "NAME SET TO PLAYER";
         SDL_RenderDebugText(ctx->renderer, (w - strlen(instr) * 8) * 0.5f, h * 0.55f, instr);
         
-        // Draw 2 name buttons (simplified)
-        SDL_SetRenderDrawColor(ctx->renderer, 100, 150, 255, 220);
-        const char* names[2] = {"PLAYER 1", "PLAYER 2"};
-        
-        float buttonWidth = w * 0.3f;  // Wider buttons
-        float buttonHeight = h * 0.12f;
-        float startX = w * 0.35f;  // Start more to the left
-        float startY = h * 0.62f;
-        float spacing = w * 0.1f;  // Space between buttons
-        
-        for (int i = 0; i < 2; i++) {
-            float x = startX + i * (buttonWidth + spacing);
-            float y = startY;
-            
-            SDL_FRect button = {x, y, buttonWidth, buttonHeight};
-            SDL_RenderFillRect(ctx->renderer, &button);
-            
-            // Draw name text
-            SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 0, 255);
-            float textX = x + (buttonWidth - strlen(names[i]) * 8) * 0.5f;
-            float textY = y + (buttonHeight - 8) * 0.5f;
-            SDL_RenderDebugText(ctx->renderer, textX, textY, names[i]);
+        // Automatically set name to "PLAYER" for mobile
+#ifdef __EMSCRIPTEN__
+        if (ctx->newHighScoreName[0] == '\0' || ctx->newHighScoreName[0] == ' ') {
+            strcpy(ctx->newHighScoreName, "PLAYER");
+            ctx->nameEntryCursorPos = 6;
         }
+#endif
         
-        // Draw confirmation button (requires extra tap to prevent accidents)
+        // Draw single confirmation button
         SDL_SetRenderDrawColor(ctx->renderer, 150, 200, 150, 220);
-        SDL_FRect confirmBtn = {w * 0.4f, h * 0.76f, w * 0.2f, h * 0.08f};
+        SDL_FRect confirmBtn = {w * 0.4f, h * 0.65f, w * 0.2f, h * 0.1f};
         SDL_RenderFillRect(ctx->renderer, &confirmBtn);
         SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 0, 255);
         const char* confirmText = "TAP TO CONTINUE";
@@ -1177,28 +1161,18 @@ void MainLoop(void* arg) {
             if (ctx->state == STATE_HIGHSCORE_DISPLAY) {
                 bool isEditing = ctx->newHighScorePosition >= 0 && ctx->newHighScorePosition < MAX_HIGHSCORES;
                 if (isEditing) {
-                    // Check if touch is in name selection area
-                    if (screenY > h * 0.6 && screenY < h * 0.72 && screenX > w * 0.35 && screenX < w * 0.85) {
-                        // Calculate which name button was touched (only 2 options now)
-                        float buttonWidth = w * 0.3f;
-                        float spacing = w * 0.1f;
-                        float startX = w * 0.35f;
-                        
-                        int selected = (int)((screenX - startX) / (buttonWidth + spacing));
-                        
-                        // Set the selected name
-                        if (selected >= 0 && selected < 2) {
-                            const char* names[2] = {"PLAYER 1", "PLAYER 2"};
-                            strcpy(ctx->newHighScoreName, names[selected]);
-                            ctx->nameEntryCursorPos = strlen(names[selected]);
-                        }
+                    // Automatically set name to "PLAYER" for mobile
+#ifdef __EMSCRIPTEN__
+                    if (ctx->newHighScoreName[0] == '\0' || ctx->newHighScoreName[0] == ' ') {
+                        strcpy(ctx->newHighScoreName, "PLAYER");
+                        ctx->nameEntryCursorPos = 6;
                     }
-                    // Check if touch is on confirmation button (extra tap required)
-                    else if (screenY > h * 0.76 && screenY < h * 0.84 && screenX > w * 0.4 && screenX < w * 0.6) {
-                        // Only continue if a name has been selected (not empty)
-                        if (ctx->newHighScoreName[0] != '\0' && ctx->newHighScoreName[0] != ' ') {
-                            ctx->state = STATE_GAMEOVER;
-                        }
+#endif
+                    
+                    // Check if touch is on confirmation button (single button now)
+                    if (screenY > h * 0.65 && screenY < h * 0.75 && screenX > w * 0.4 && screenX < w * 0.6) {
+                        // Continue to game over screen
+                        ctx->state = STATE_GAMEOVER;
                     }
                 }
             }
