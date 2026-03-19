@@ -1066,17 +1066,17 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
         const char* instr = "CHOOSE YOUR NAME";
         SDL_RenderDebugText(ctx->renderer, (w - strlen(instr) * 8) * 0.5f, h * 0.55f, instr);
         
-        // Draw 4 name buttons
+        // Draw 2 name buttons (simplified)
         SDL_SetRenderDrawColor(ctx->renderer, 100, 150, 255, 220);
-        const char* names[4] = {"PLAYER 1", "PLAYER 2", "PLAYER 3", "PLAYER 4"};
+        const char* names[2] = {"PLAYER 1", "PLAYER 2"};
         
-        float buttonWidth = w * 0.18f;
+        float buttonWidth = w * 0.25f;
         float buttonHeight = h * 0.12f;
-        float startX = w * 0.32f;
+        float startX = w * 0.375f;
         float startY = h * 0.62f;
-        float spacing = w * 0.02f;
+        float spacing = w * 0.1f;
         
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 2; i++) {
             float x = startX + i * (buttonWidth + spacing);
             float y = startY;
             
@@ -1089,6 +1089,16 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
             float textY = y + (buttonHeight - 8) * 0.5f;
             SDL_RenderDebugText(ctx->renderer, textX, textY, names[i]);
         }
+        
+        // Draw confirmation button (requires extra tap to prevent accidents)
+        SDL_SetRenderDrawColor(ctx->renderer, 150, 200, 150, 220);
+        SDL_FRect confirmBtn = {w * 0.4f, h * 0.76f, w * 0.2f, h * 0.08f};
+        SDL_RenderFillRect(ctx->renderer, &confirmBtn);
+        SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 0, 255);
+        const char* confirmText = "TAP TO CONTINUE";
+        float confirmTextX = confirmBtn.x + (confirmBtn.w - strlen(confirmText) * 8) * 0.5f;
+        float confirmTextY = confirmBtn.y + (confirmBtn.h - 8) * 0.5f;
+        SDL_RenderDebugText(ctx->renderer, confirmTextX, confirmTextY, confirmText);
         
         SDL_SetRenderScale(ctx->renderer, 1.5f, 1.5f);
 #endif
@@ -1168,19 +1178,26 @@ void MainLoop(void* arg) {
                 bool isEditing = ctx->newHighScorePosition >= 0 && ctx->newHighScorePosition < MAX_HIGHSCORES;
                 if (isEditing) {
                     // Check if touch is in name selection area
-                    if (screenY > h * 0.6 && screenY < h * 0.8 && screenX > w * 0.3 && screenX < w * 0.7) {
-                        // Calculate which name button was touched
-                        float buttonWidth = w * 0.18f;
-                        float spacing = w * 0.02f;
-                        float startX = w * 0.32f;
+                    if (screenY > h * 0.6 && screenY < h * 0.72 && screenX > w * 0.375 && screenX < w * 0.825) {
+                        // Calculate which name button was touched (only 2 options now)
+                        float buttonWidth = w * 0.25f;
+                        float spacing = w * 0.1f;
+                        float startX = w * 0.375f;
                         
                         int selected = (int)((screenX - startX) / (buttonWidth + spacing));
                         
                         // Set the selected name
-                        if (selected >= 0 && selected < 4) {
-                            const char* names[4] = {"PLAYER 1", "PLAYER 2", "PLAYER 3", "PLAYER 4"};
+                        if (selected >= 0 && selected < 2) {
+                            const char* names[2] = {"PLAYER 1", "PLAYER 2"};
                             strcpy(ctx->newHighScoreName, names[selected]);
                             ctx->nameEntryCursorPos = strlen(names[selected]);
+                        }
+                    }
+                    // Check if touch is on confirmation button (extra tap required)
+                    else if (screenY > h * 0.76 && screenY < h * 0.84 && screenX > w * 0.4 && screenX < w * 0.6) {
+                        // Only continue if a name has been selected (not empty)
+                        if (ctx->newHighScoreName[0] != '\0' && ctx->newHighScoreName[0] != ' ') {
+                            ctx->state = STATE_GAMEOVER;
                         }
                     }
                 }
