@@ -1064,11 +1064,13 @@ void MainLoop(void* arg) {
 #endif
         }
         if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-            // On landing page, tap activates touch controls
+            // On landing page, tap activates touch controls AND starts game
             if (ctx->state == STATE_LANDING) {
 #ifdef __EMSCRIPTEN__
                 ctx->showTouchControls = true;
 #endif
+                ctx->state = STATE_PLAYING;
+                ResetGame(ctx);
             } else {
                 // Normal sound toggle behavior during gameplay
                 if (ctx->audio.stream) {
