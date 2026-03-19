@@ -1061,20 +1061,35 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
         SDL_FRect selectBg = {w * 0.3f, h * 0.6f, w * 0.4f, h * 0.2f};
         SDL_RenderFillRect(ctx->renderer, &selectBg);
         
-        // Draw instruction - now automatically uses "PLAYER"
+        // Different UI based on input method
+#ifndef __EMSCRIPTEN__
+        // Keyboard mode: Show editing instructions
+        SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 220);
+        const char* instr = "TYPE NAME, PRESS ENTER TO FINISH";
+        SDL_RenderDebugText(ctx->renderer, (w - strlen(instr) * 8) * 0.5f, h * 0.55f, instr);
+        
+        // Show confirmation for keyboard users
+        SDL_SetRenderDrawColor(ctx->renderer, 150, 200, 150, 220);
+        SDL_FRect confirmBtn = {w * 0.4f, h * 0.65f, w * 0.2f, h * 0.1f};
+        SDL_RenderFillRect(ctx->renderer, &confirmBtn);
+        SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 0, 255);
+        const char* confirmText = "PRESS R TO CONTINUE";
+        float confirmTextX = confirmBtn.x + (confirmBtn.w - strlen(confirmText) * 8) * 0.5f;
+        float confirmTextY = confirmBtn.y + (confirmBtn.h - 8) * 0.5f;
+        SDL_RenderDebugText(ctx->renderer, confirmTextX, confirmTextY, confirmText);
+#else
+        // Touch mode: Automatically use "PLAYER" with touch confirmation
         SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 220);
         const char* instr = "NAME SET TO PLAYER";
         SDL_RenderDebugText(ctx->renderer, (w - strlen(instr) * 8) * 0.5f, h * 0.55f, instr);
         
         // Automatically set name to "PLAYER" for mobile
-#ifdef __EMSCRIPTEN__
         if (ctx->newHighScoreName[0] == '\0' || ctx->newHighScoreName[0] == ' ') {
             strcpy(ctx->newHighScoreName, "PLAYER");
             ctx->nameEntryCursorPos = 6;
         }
-#endif
         
-        // Draw single confirmation button
+        // Draw single confirmation button for touch
         SDL_SetRenderDrawColor(ctx->renderer, 150, 200, 150, 220);
         SDL_FRect confirmBtn = {w * 0.4f, h * 0.65f, w * 0.2f, h * 0.1f};
         SDL_RenderFillRect(ctx->renderer, &confirmBtn);
@@ -1083,6 +1098,7 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
         float confirmTextX = confirmBtn.x + (confirmBtn.w - strlen(confirmText) * 8) * 0.5f;
         float confirmTextY = confirmBtn.y + (confirmBtn.h - 8) * 0.5f;
         SDL_RenderDebugText(ctx->renderer, confirmTextX, confirmTextY, confirmText);
+#endif
         
         SDL_SetRenderScale(ctx->renderer, 1.5f, 1.5f);
 #endif
@@ -1169,11 +1185,13 @@ void MainLoop(void* arg) {
                     }
 #endif
                     
-                    // Check if touch is on confirmation button (single button now)
+                    // Check if touch is on confirmation button (touch mode only)
+#ifdef __EMSCRIPTEN__
                     if (screenY > h * 0.65 && screenY < h * 0.75 && screenX > w * 0.4 && screenX < w * 0.6) {
                         // Continue to game over screen
                         ctx->state = STATE_GAMEOVER;
                     }
+#endif
                 }
             }
             
