@@ -1025,6 +1025,7 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
         // Format score with fixed width (6 digits) and name
         if (i == ctx->newHighScorePosition) {
             isEditing = true;
+            printf("Displaying new highscore name: '%s'\n", ctx->newHighScoreName);
             sprintf(scoreText, "%6d %s", ctx->score, ctx->newHighScoreName);
         } else {
             sprintf(scoreText, "%6d %s", ctx->highScores[i].score, ctx->highScores[i].name);
