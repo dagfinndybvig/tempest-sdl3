@@ -21,6 +21,13 @@ The project is currently a functional 3D vector-style engine prototype built wit
   - `Z`: Trigger Superzapper (one-time screen clear).
   - `R`: Reset game.
   - `0-3`: Switch tunnel geometry during gameplay.
+  - `S/s`: Toggle sound effects on/off (case-insensitive).
+  - **Touch Controls (Web only)**:
+    - Left 30% of screen: Rotate counter-clockwise
+    - Right 30% of screen: Rotate clockwise
+    - Bottom center: Fire shots
+    - Bottom right: Superzapper
+    - Tap on landing/game over screens: Start/restart with touch controls
 - **Enemy System**: 
   - Enemies are rendered as green "X" shapes.
   - They spawn at the far end of the tunnel and move toward the player.
@@ -45,6 +52,20 @@ The project is currently a functional 3D vector-style engine prototype built wit
 - **Vector Digit Rendering**: A custom line-based digit renderer draws the score and lives in a classic vector style.
 - **Indicators**: Visual feedback for remaining lives and Superzapper availability.
 
+### 4. Touch Controls (Web Version)
+- **Optional Activation**: Touch controls are optional and activated by user choice.
+- **Landing Page**: Shows "PRESS UP TO START" and "OR TAP TO START WITH TOUCH CONTROLS".
+- **Game Over Screen**: Shows "PRESS UP TO RESTART" and "OR TAP TO RESTART WITH TOUCH CONTROLS".
+- **Touch Zones**:
+  - Left 30% of screen: Rotate counter-clockwise (continuous)
+  - Right 30% of screen: Rotate clockwise (continuous)
+  - Bottom center (30-70%): Fire shots (edge-triggered)
+  - Bottom right (70-100%): Superzapper (edge-triggered)
+- **Visual Feedback**: Semi-transparent colored zones with text labels ("<<<", ">>>", "FIRE", "ZAP").
+- **Toggle During Gameplay**: Screen tap toggles touch controls on/off.
+- **Conditional Compilation**: Touch code only compiled in web version (`#ifdef __EMSCRIPTEN__`).
+- **Sound Control**: S key toggles sound in both native and web versions.
+
 ### 3. Build & Platform Support
 - **Native**: Compiles with GCC on Linux (`-lSDL3 -lm`).
 - **WebAssembly**: Ready for Emscripten via `build.sh`.
@@ -52,6 +73,27 @@ The project is currently a functional 3D vector-style engine prototype built wit
 ---
 
 ## 🛠 Technical Notes for Future Developers
+
+### Touch Controls Implementation
+
+The touch control system uses SDL3's touch events (`SDL_EVENT_FINGER_DOWN`, `SDL_EVENT_FINGER_MOTION`, `SDL_EVENT_FINGER_UP`) and includes:
+
+#### Event Handling
+- Touch positions are normalized to [0,1] range and converted to screen coordinates
+- Touch zones are defined as percentages of screen width/height for responsiveness
+- Continuous touch detection for rotation zones
+- Edge-triggered detection for fire/superzapper buttons
+
+#### State Management
+- `ctx->showTouchControls`: Boolean flag indicating touch controls are active
+- `ctx->touchLeftActive`, `ctx->touchRightActive`, etc.: Current touch zone states
+- Touch controls are automatically activated on landing page tap
+- Keyboard start (Arrow Up) explicitly disables touch controls
+
+#### Visual Feedback
+- Semi-transparent colored rectangles for touch zones
+- Text labels using `SDL_RenderDebugText`
+- Yellow color for touch messages to distinguish from other UI elements
 
 ### Coordinate System
 - **Z-Axis**: `z=0` is at the viewer. The tunnel rim where the player sits is currently around `z=2.0`. Higher `z` values are further "into" the screen.
@@ -74,7 +116,7 @@ For explosions when enemies are hit, implement a simple particle system:
 3. Update and draw them in `MainLoop`.
 
 ### Optimization Tips
-- The current collision detection is $O(N \times M)$ where $N$ is shots and $M$ is enemies. Since both are small (10 and 5), this is fine, but consider spatial partitioning if increasing counts significantly.
+- The current collision detection is $O(N 	imes M)$ where $N$ is shots and $M$ is enemies. Since both are small (10 and 5), this is fine, but consider spatial partitioning if increasing counts significantly.
 - Use `SDL_RenderLines` (plural) for batching line draws if performance becomes a bottleneck on low-end hardware.
 
 ---
@@ -96,3 +138,13 @@ For explosions when enemies are hit, implement a simple particle system:
 - [x] Add integrated name entry directly in highscore display.
 - [x] Update visual design to match landing page style (glowing red heading, neon green scores).
 - [x] Set reasonable default high scores (500-100 points with "PROSPERO" name).
+- [x] Add optional touch controls for mobile devices (web version only).
+- [x] Implement touch control activation via landing page tap.
+- [x] Add visual touch indicators (semi-transparent zones with labels).
+- [x] Implement touch zone logic (left/right rotation, fire, superzapper).
+- [x] Add touch control toggle during gameplay via screen tap.
+- [x] Implement game over screen tap restart with touch controls.
+- [x] Add consistent touch control messaging to both landing and game over screens.
+- [x] Reorganize controls: S key toggles sound, mouse click toggles touch controls.
+- [x] Make S key sound toggle case-insensitive.
+- [x] Ensure landing page only starts with Arrow Up key (not any key).

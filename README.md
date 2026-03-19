@@ -39,14 +39,38 @@ cd docs && python3 -m http.server 8000
 The web version is automatically built to the `docs/` directory. Simply push to GitHub and enable GitHub Pages to serve from the `docs` folder.
 
 ## Controls
+
+### Keyboard Controls (Native & Web)
 - **Left / Right Arrow Keys**: Rotate the Blaster around the tunnel rim.
 - **Space**: Fire shots down the tunnel.
 - **Z**: Activate the Superzapper (once per game - clears all enemies).
 - **R**: Reset the game after a Game Over.
 - **0–3 Keys**: Switch tunnel geometry while playing. `0` enables the irregular, in-tunnel variant with ±25% angle jitter, `1` selects the circular tunnel, `2` switches to the square tunnel, and `3` activates the dynamic "flat" tunnel with wobble and tilt. During Game Over you can also press any of those keys to restart directly in that geometry.
-- After you lose all lives, the tunnel randomly switches to one of the four geometries so each Game Over screen feels different.
-- On Game Over the background dims and a `PRESS ANY KEY` prompt is drawn in vector lines; press any number key or `R` to restart immediately in that geometry.
-- **Sound Toggle**: Click anywhere on the screen to mute/unmute all sound effects (indicator shown at bottom of screen).
+- **S Key**: Toggle sound effects on/off (case-insensitive).
+- **Arrow Up (↑)**: Start game from landing page or restart from game over screen.
+
+### Touch Controls (Web Version Only)
+The game features optional touch controls for mobile devices:
+
+**Touch Zones:**
+- **Left 30% of screen**: Rotate counter-clockwise (continuous while touching)
+- **Right 30% of screen**: Rotate clockwise (continuous while touching)
+- **Bottom Center (30-70%)**: Fire shots (single shot per tap)
+- **Bottom Right (70-100%)**: Activate Superzapper (single activation per tap)
+
+**Activation:**
+- **Landing Page**: Tap anywhere to start the game with touch controls active
+- **Game Over Screen**: Tap anywhere to restart the game with touch controls active
+- **During Gameplay**: Tap anywhere to toggle touch controls on/off
+
+**Visual Feedback:**
+- Semi-transparent colored zones show active touch areas
+- Text labels indicate zone functions: "<<<", ">>>", "FIRE", "ZAP"
+- Yellow status messages show when touch controls are active
+
+### Sound Control
+- **S Key**: Toggle sound effects on/off (works in both keyboard and touch modes)
+- **Status Indicator**: Shows "S TO TOGGLE SOUND" or current sound state at bottom of screen
 
 ## License
 MIT License - feel free to experiment with the code!
