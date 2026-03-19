@@ -449,8 +449,8 @@ static void DrawLandingPage(AppContext* ctx, int w, int h) {
     // Restore original scale
     SDL_SetRenderScale(ctx->renderer, oldScaleX, oldScaleY);
 
-    // Bottom: PRESS ANY KEY
-    const char* prompt = "PRESS ANY KEY";
+    // Bottom: PRESS UP OR TAP TO START
+    const char* prompt = "PRESS UP OR TAP TO START";
     float promptSize = 32.0f;
     float promptSpacing = promptSize * 0.25f;
     float promptWidth = MeasureGlyphStringWidth(prompt, promptSize, promptSpacing);
