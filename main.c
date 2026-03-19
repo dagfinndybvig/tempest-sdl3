@@ -1113,6 +1113,18 @@ void MainLoop(void* arg) {
 #endif
 
         if (event.type == SDL_EVENT_KEY_DOWN) {
+            // S key toggles sound (works in all states) - case insensitive
+            if ((event.key.scancode == SDL_SCANCODE_S || event.key.key == 's' || event.key.key == 'S') && ctx->audio.stream) {
+                printf("S key pressed - toggling sound\n");
+                if (SDL_AudioStreamDevicePaused(ctx->audio.stream)) {
+                    SDL_ResumeAudioStreamDevice(ctx->audio.stream);
+                    printf("Sound enabled\n");
+                } else {
+                    SDL_PauseAudioStreamDevice(ctx->audio.stream);
+                    printf("Sound muted\n");
+                }
+            }
+            
             if (ctx->state == STATE_LANDING) {
                 // Keyboard start disables touch controls
 #ifdef __EMSCRIPTEN__
@@ -1169,15 +1181,6 @@ void MainLoop(void* arg) {
                 ctx->flashTimer = 10;
                 for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
                 PlayWav(&ctx->audio, WAV_EXPLOSION, false);
-            }
-            
-            // S key toggles sound (works in both native and web) - case insensitive
-            if ((event.key.scancode == SDL_SCANCODE_S || event.key.key == 's' || event.key.key == 'S') && ctx->audio.stream) {
-                if (SDL_AudioStreamDevicePaused(ctx->audio.stream)) {
-                    SDL_ResumeAudioStreamDevice(ctx->audio.stream);
-                } else {
-                    SDL_PauseAudioStreamDevice(ctx->audio.stream);
-                }
             }
             
             // Handle high score display with integrated name entry
