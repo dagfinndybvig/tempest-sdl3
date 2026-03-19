@@ -1169,6 +1169,12 @@ void MainLoop(void* arg) {
             }
             // On highscore screen, tap returns to game over (then player can restart)
             else if (ctx->state == STATE_HIGHSCORE_DISPLAY) {
+                bool isEditing = ctx->newHighScorePosition >= 0 && ctx->newHighScorePosition < MAX_HIGHSCORES;
+                if (isEditing) {
+                    // Auto-finalize the highscore entry for touch devices
+                    FinalizeHighScoreEntry(ctx);
+                    ctx->newHighScorePosition = -1; // Clear editing mode
+                }
                 // Clear the pending flag when leaving highscore entry
                 ctx->highscoreEntryPending = false;
                 ctx->state = STATE_GAMEOVER;
