@@ -1070,11 +1070,11 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
         SDL_SetRenderDrawColor(ctx->renderer, 100, 150, 255, 220);
         const char* names[2] = {"PLAYER 1", "PLAYER 2"};
         
-        float buttonWidth = w * 0.25f;
+        float buttonWidth = w * 0.3f;  // Wider buttons
         float buttonHeight = h * 0.12f;
-        float startX = w * 0.375f;
+        float startX = w * 0.35f;  // Start more to the left
         float startY = h * 0.62f;
-        float spacing = w * 0.1f;
+        float spacing = w * 0.1f;  // Space between buttons
         
         for (int i = 0; i < 2; i++) {
             float x = startX + i * (buttonWidth + spacing);
@@ -1178,11 +1178,11 @@ void MainLoop(void* arg) {
                 bool isEditing = ctx->newHighScorePosition >= 0 && ctx->newHighScorePosition < MAX_HIGHSCORES;
                 if (isEditing) {
                     // Check if touch is in name selection area
-                    if (screenY > h * 0.6 && screenY < h * 0.72 && screenX > w * 0.375 && screenX < w * 0.825) {
+                    if (screenY > h * 0.6 && screenY < h * 0.72 && screenX > w * 0.35 && screenX < w * 0.85) {
                         // Calculate which name button was touched (only 2 options now)
-                        float buttonWidth = w * 0.25f;
+                        float buttonWidth = w * 0.3f;
                         float spacing = w * 0.1f;
-                        float startX = w * 0.375f;
+                        float startX = w * 0.35f;
                         
                         int selected = (int)((screenX - startX) / (buttonWidth + spacing));
                         
