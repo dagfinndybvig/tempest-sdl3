@@ -1123,15 +1123,20 @@ void MainLoop(void* arg) {
                     SDL_PauseAudioStreamDevice(ctx->audio.stream);
                     printf("Sound muted\n");
                 }
+                continue; // Don't start game, just toggle sound
             }
             
             if (ctx->state == STATE_LANDING) {
-                // Keyboard start disables touch controls
+                // Only Arrow Up starts the game with keyboard controls
+                if (event.key.scancode == SDL_SCANCODE_UP) {
 #ifdef __EMSCRIPTEN__
-                ctx->showTouchControls = false;
+                    ctx->showTouchControls = false;
 #endif
-                ctx->state = STATE_PLAYING;
-                ResetGame(ctx);
+                    ctx->state = STATE_PLAYING;
+                    ResetGame(ctx);
+                    continue;
+                }
+                // All other keys ignored on landing page
                 continue;
             }
             if (ctx->state == STATE_GAMEOVER) {
