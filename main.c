@@ -721,8 +721,11 @@ void DrawBlaster(AppContext* ctx, int w, int h) {
 }
 
 void ResetGame(AppContext* ctx) {
+    // Only reset score if we don't have a pending highscore entry
+    if (!ctx->highscoreEntryPending) {
+        ctx->score = 0;
+    }
     ctx->lives = 3;
-    ctx->score = 0;
     ctx->gameOver = false;
     ctx->superzapperUsed = false;
     ctx->flashTimer = 0;
@@ -1294,6 +1297,18 @@ void MainLoop(void* arg) {
                 if (event.key.scancode == SDL_SCANCODE_UP) {
                     ContinueGameWithSelectedGeometry(ctx);
                     ctx->state = STATE_PLAYING;
+                    continue;
+                }
+                
+                // R key restarts the game
+                if (event.key.scancode == SDL_SCANCODE_R) {
+                    // Check if we have a pending highscore entry that needs to be handled
+                    if (ctx->highscoreEntryPending) {
+                        printf("DEBUG: R pressed but have pending highscore, showing highscore screen\n");
+                        ctx->state = STATE_HIGHSCORE_DISPLAY;
+                    } else {
+                        ctx->state = STATE_PLAYING;
+                    }
                     continue;
                 }
                 continue; // Ignore other keys
