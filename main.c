@@ -1099,8 +1099,10 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
         SDL_RenderDebugText(ctx->renderer, confirmTextX, confirmTextY, confirmText);
 #else
         // Touch mode: Automatically use "PLAYER" with touch confirmation
-        // Set name based on input mode
-        if (ctx->newHighScoreName[0] == '\0' || ctx->newHighScoreName[0] == ' ') {
+        // Set name based on input mode (only if not already set)
+        static bool nameInitialized = false;
+        if (!nameInitialized && (ctx->newHighScoreName[0] == '\0' || ctx->newHighScoreName[0] == ' ')) {
+            nameInitialized = true; // Prevent re-initialization
             if (ctx->touchOnlyMode) {
                 // Touch-only devices: auto-set and lock to "PLAYER"
                 strcpy(ctx->newHighScoreName, "PLAYER");
