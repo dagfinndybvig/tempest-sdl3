@@ -374,14 +374,15 @@ static void DrawGameOverPrompt(AppContext* ctx, int w, int h) {
     SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 200);
     DrawGlyphString(ctx->renderer, prompt, ((float)w - promptWidth) * 0.5f, h * 0.65f, promptSize, promptSpacing);
 
-    // Touch controls message (web only)
+    // Touch controls message (web only) - using printed text like landing page
 #ifdef __EMSCRIPTEN__
-    const char* touchPrompt = "OR TAP TO RESTART WITH TOUCH CONTROLS";
-    float touchPromptSize = 20.0f;
-    float touchPromptSpacing = touchPromptSize * 0.25f;
-    float touchPromptWidth = MeasureGlyphStringWidth(touchPrompt, touchPromptSize, touchPromptSpacing);
+    SDL_SetRenderScale(ctx->renderer, 1.5f, 1.5f);
     SDL_SetRenderDrawColor(ctx->renderer, 200, 200, 50, 200);
-    DrawGlyphString(ctx->renderer, touchPrompt, ((float)w - touchPromptWidth) * 0.5f, h * 0.72f, touchPromptSize, touchPromptSpacing);
+    const char* touchPrompt = "OR TAP TO RESTART WITH TOUCH CONTROLS";
+    float tx = ((float)w / 1.5f - (float)strlen(touchPrompt) * 8.0f) * 0.5f;
+    float ty = (float)h * 0.72f / 1.5f;
+    SDL_RenderDebugText(ctx->renderer, tx, ty, touchPrompt);
+    SDL_SetRenderScale(ctx->renderer, 1.0f, 1.0f);
 #endif
 }
 
