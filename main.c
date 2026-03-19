@@ -426,9 +426,9 @@ static void DrawLandingPage(AppContext* ctx, int w, int h) {
     // Touch controls activation message (web only)
     const char* touchMessage = NULL;
 #ifdef __EMSCRIPTEN__
-    if (!ctx->showTouchControls) {
+    if (ctx->state == STATE_LANDING) {
         touchMessage = "OR TAP TO START WITH TOUCH CONTROLS";
-    } else {
+    } else if (ctx->showTouchControls) {
         touchMessage = "TOUCH CONTROLS ACTIVE";
     }
 #endif
