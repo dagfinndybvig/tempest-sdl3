@@ -134,6 +134,12 @@ typedef struct {
     char newHighScoreName[20];
     int newHighScorePosition;
     int nameEntryCursorPos;
+    // Touch controls (web only)
+    bool touchLeftActive;
+    bool touchRightActive;
+    bool touchFireActive;
+    bool touchSuperzapperActive;
+    bool showTouchControls;
 } AppContext;
 
 typedef struct {
@@ -908,6 +914,37 @@ void DrawHUD(AppContext* ctx, int w, int h) {
     float hx = (float)w - (float)strlen(hint) * 8.0f - 10.0f;
     float hy = (float)h - 20.0f;
     SDL_RenderDebugText(ctx->renderer, hx, hy, hint);
+
+    // Draw touch controls for web version
+#ifdef __EMSCRIPTEN__
+    if (ctx->showTouchControls) {
+        // Left touch zone indicator
+        SDL_SetRenderDrawColor(ctx->renderer, 0, 100, 200, 100);
+        SDL_FRect leftZone = {0.0f, 0.0f, w * 0.3f, (float)h};
+        SDL_RenderFillRect(ctx->renderer, &leftZone);
+        
+        // Right touch zone indicator  
+        SDL_FRect rightZone = {w * 0.7f, 0.0f, w * 0.3f, (float)h};
+        SDL_RenderFillRect(ctx->renderer, &rightZone);
+        
+        // Fire button
+        SDL_SetRenderDrawColor(ctx->renderer, 200, 0, 0, 150);
+        SDL_FRect fireZone = {w * 0.3f, h * 0.8f, w * 0.4f, h * 0.2f};
+        SDL_RenderFillRect(ctx->renderer, &fireZone);
+        
+        // Superzapper button
+        SDL_SetRenderDrawColor(ctx->renderer, 0, 200, 0, 150);
+        SDL_FRect superZone = {w * 0.7f, h * 0.8f, w * 0.3f, h * 0.2f};
+        SDL_RenderFillRect(ctx->renderer, &superZone);
+        
+        // Draw labels
+        SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 255);
+        SDL_RenderDebugText(ctx->renderer, w * 0.15f - 20.0f, h * 0.5f, "<<<");
+        SDL_RenderDebugText(ctx->renderer, w * 0.85f - 20.0f, h * 0.5f, ">>>");
+        SDL_RenderDebugText(ctx->renderer, w * 0.5f - 20.0f, h * 0.85f, "FIRE");
+        SDL_RenderDebugText(ctx->renderer, w * 0.85f - 20.0f, h * 0.85f, "ZAP");
+    }
+#endif
 }
 
 
@@ -1020,6 +1057,40 @@ void MainLoop(void* arg) {
                 }
             }
         }
+
+        // Touch controls for web version
+#ifdef __EMSCRIPTEN__
+        if (event.type == SDL_EVENT_FINGER_DOWN || event.type == SDL_EVENT_FINGER_MOTION) {
+            // Get touch position normalized to [0,1]
+            float touchX = event.tfinger.x;
+            float touchY = event.tfinger.y;
+            
+            // Convert to screen coordinates
+            int w, h;
+            SDL_GetWindowSize(ctx->window, &w, &h);
+            int screenX = (int)(touchX * w);
+            int screenY = (int)(touchY * h);
+            
+            // Define touch zones
+            bool inLeftZone = screenX < w * 0.3;
+            bool inRightZone = screenX > w * 0.7;
+            bool inFireZone = screenY > h * 0.8 && screenX > w * 0.3 && screenX < w * 0.7;
+            bool inSuperzapperZone = screenY > h * 0.8 && screenX > w * 0.7;
+            
+            // Update touch states
+            ctx->touchLeftActive = inLeftZone;
+            ctx->touchRightActive = inRightZone;
+            ctx->touchFireActive = inFireZone;
+            ctx->touchSuperzapperActive = inSuperzapperZone;
+        }
+        if (event.type == SDL_EVENT_FINGER_UP) {
+            ctx->touchLeftActive = false;
+            ctx->touchRightActive = false;
+            ctx->touchFireActive = false;
+            ctx->touchSuperzapperActive = false;
+        }
+#endif
+
         if (event.type == SDL_EVENT_KEY_DOWN) {
             if (ctx->state == STATE_LANDING) {                ctx->state = STATE_PLAYING;
                 ResetGame(ctx);
@@ -1115,6 +1186,41 @@ void MainLoop(void* arg) {
             }
         }
     }
+
+    // Touch controls logic (web only)
+#ifdef __EMSCRIPTEN__
+    if (ctx->touchLeftActive) {
+        ctx->playerSegment = (ctx->playerSegment + 1) % NUM_SIDES;
+    }
+    if (ctx->touchRightActive) {
+        ctx->playerSegment = (ctx->playerSegment - 1 + NUM_SIDES) % NUM_SIDES;
+    }
+    
+    // Fire control - only trigger on initial touch, not continuous
+    static bool wasTouchFireActive = false;
+    if (ctx->touchFireActive && !wasTouchFireActive && ctx->state == STATE_PLAYING) {
+        for(int i=0; i<MAX_SHOTS; i++) {
+            if(!ctx->shots[i].active) {
+                ctx->shots[i].active = true;
+                ctx->shots[i].z = 2.0f;
+                ctx->shots[i].segment = ctx->playerSegment;
+                PlayWav(&ctx->audio, WAV_LASERZAP, false);
+                break;
+            }
+        }
+    }
+    wasTouchFireActive = ctx->touchFireActive;
+    
+    // Superzapper control
+    static bool wasTouchSuperzapperActive = false;
+    if (ctx->touchSuperzapperActive && !wasTouchSuperzapperActive && !ctx->superzapperUsed && ctx->state == STATE_PLAYING) {
+        ctx->superzapperUsed = true;
+        ctx->flashTimer = 10;
+        for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
+        PlayWav(&ctx->audio, WAV_EXPLOSION, false);
+    }
+    wasTouchSuperzapperActive = ctx->touchSuperzapperActive;
+#endif
 
     if (ctx->state == STATE_PLAYING) {
         if (ctx->flashTimer > 0) ctx->flashTimer--;
@@ -1450,6 +1556,11 @@ int main(int argc, char* argv[]) {
     ctx.selectedTunnelShape = TUNNEL_CIRCLE;
     ctx.window = SDL_CreateWindow("Tempest SDL3", 800, 800, 0);
     ctx.renderer = SDL_CreateRenderer(ctx.window, NULL);
+    
+    // Initialize touch controls for web version
+#ifdef __EMSCRIPTEN__
+    ctx.showTouchControls = true;
+#endif
     
     // Load high scores
     LoadHighScores(&ctx);
