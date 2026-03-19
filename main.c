@@ -852,16 +852,20 @@ static void SaveHighScores(AppContext* ctx) {
 }
 
 static void AddHighScore(AppContext* ctx, int score) {
+    printf("DEBUG: AddHighScore called with score: %d\n", score);
+    
     // Check if we have a pending highscore entry from before
     if (ctx->highscoreEntryPending) {
-        // Re-use the existing highscore entry
+        printf("DEBUG: Resuming pending highscore entry\n");
         ctx->state = STATE_HIGHSCORE_DISPLAY;
         return;
     }
     
     // Check if score qualifies for high score table
     for (int i = 0; i < MAX_HIGHSCORES; i++) {
+        printf("DEBUG: Comparing with highscore %d: %d\n", i, ctx->highScores[i].score);
         if (score > ctx->highScores[i].score) {
+            printf("DEBUG: New highscore! Position %d\n", i);
             // Shift lower scores down
             for (int j = MAX_HIGHSCORES - 1; j > i; j--) {
                 ctx->highScores[j] = ctx->highScores[j - 1];
@@ -882,6 +886,7 @@ static void AddHighScore(AppContext* ctx, int score) {
             return;
         }
     }
+    printf("DEBUG: No highscore achieved\n");
     // If no high score, go directly to game over
     ctx->state = STATE_GAMEOVER;
 }
