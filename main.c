@@ -437,7 +437,6 @@ static void DrawLandingPage(AppContext* ctx, int w, int h) {
         "ARROWS TO MOVE LEFT/RIGHT",
         "SPACE TO FIRE",
         "Z FOR SUPERZAPPER",
-        "0-3 FOR TUNNELS",
     };
     
     // Touch controls activation message (web only)
@@ -456,7 +455,7 @@ static void DrawLandingPage(AppContext* ctx, int w, int h) {
     SDL_SetRenderScale(ctx->renderer, 2.5f, 2.5f); // Scale up for "large ascii letters"
     
     SDL_SetRenderDrawColor(ctx->renderer, 57, 255, 20, 255); // Neon Green
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 3; i++) {  // Changed from 4 to 3 since we removed one control
         // Since we are scaled, we need to divide the coordinates by the scale
         float tx = ((float)w / 2.5f - (float)strlen(controls[i]) * 8.0f) * 0.5f;
         float ty = (float)h * 0.4f / 2.5f + i * 20.0f;
