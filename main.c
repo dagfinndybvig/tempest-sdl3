@@ -741,11 +741,17 @@ void ResetGame(AppContext* ctx) {
     for(int i=0; i<MAX_SHOTS; i++) ctx->shots[i].active = false;
     for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
     for(int i=0; i<MAX_BURST_SHOTS; i++) ctx->burstShots[i].active = false;
+    
+    // Clear the pending flag when starting a new game (not continuing with highscore)
+    ctx->highscoreEntryPending = false;
 }
 
 static void ContinueGameWithSelectedGeometry(AppContext* ctx) {
     ctx->lives = 3;
-    ctx->score = 0;
+    // Only reset score if we don't have a pending highscore entry
+    if (!ctx->highscoreEntryPending) {
+        ctx->score = 0;
+    }
     ctx->gameOver = false;
     ctx->superzapperUsed = false;
     ctx->flashTimer = 0;
@@ -894,6 +900,7 @@ static void AddHighScore(AppContext* ctx, int score) {
     }
     printf("DEBUG: No highscore achieved\n");
     // If no high score, go directly to game over
+    ctx->highscoreEntryPending = false;
     ctx->state = STATE_GAMEOVER;
 }
 
@@ -1192,8 +1199,7 @@ void MainLoop(void* arg) {
                     FinalizeHighScoreEntry(ctx);
                     ctx->newHighScorePosition = -1; // Clear editing mode
                 }
-                // Clear the pending flag when leaving highscore entry
-                ctx->highscoreEntryPending = false;
+                // Don't clear highscoreEntryPending here - it should persist until actual game restart
                 ctx->state = STATE_GAMEOVER;
             }
             else {
