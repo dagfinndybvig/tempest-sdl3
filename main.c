@@ -1297,8 +1297,26 @@ void MainLoop(void* arg) {
             bool inFireZone = (screenX > w * 0.4 && screenX < w * 0.6 && screenY > h * 0.4 && screenY < h * 0.6);
             bool inSuperzapperZone = (screenX > w * 0.7 && screenY > h * 0.8); // Keep superzapper in corner
             
-            ctx->touchFireActive = inFireZone;
-            ctx->touchSuperzapperActive = inSuperzapperZone;
+            // Only set fire/superzapper active if we're not in a swipe gesture
+            if (!ctx->isSwiping) {
+                ctx->touchFireActive = inFireZone;
+                ctx->touchSuperzapperActive = inSuperzapperZone;
+            }
+        }
+        if (event.type == SDL_EVENT_FINGER_DOWN) {
+            // On initial touch down, also check fire/superzapper zones
+            int w, h;
+            SDL_GetWindowSize(ctx->window, &w, &h);
+            int screenX = (int)(event.tfinger.x * w);
+            int screenY = (int)(event.tfinger.y * h);
+            
+            bool inFireZone = (screenX > w * 0.4 && screenX < w * 0.6 && screenY > h * 0.4 && screenY < h * 0.6);
+            bool inSuperzapperZone = (screenX > w * 0.7 && screenY > h * 0.8);
+            
+            if (!ctx->isSwiping) {
+                ctx->touchFireActive = inFireZone;
+                ctx->touchSuperzapperActive = inSuperzapperZone;
+            }
         }
         if (event.type == SDL_EVENT_FINGER_UP) {
             ctx->touchLeftActive = false;
@@ -1429,11 +1447,17 @@ void MainLoop(void* arg) {
 
     // Touch controls logic (web only)
 #ifdef __EMSCRIPTEN__
-    if (ctx->touchLeftActive) {
-        ctx->playerSegment = (ctx->playerSegment + 1) % NUM_SIDES;
-    }
-    if (ctx->touchRightActive) {
-        ctx->playerSegment = (ctx->playerSegment - 1 + NUM_SIDES) % NUM_SIDES;
+    // Frame counter for slowing down touch rotation (50% speed)
+    static int touchRotationFrameCounter = 0;
+    touchRotationFrameCounter++;
+    
+    if (touchRotationFrameCounter % 2 == 0) { // Only update every 2nd frame (50% speed)
+        if (ctx->touchLeftActive) {
+            ctx->playerSegment = (ctx->playerSegment + 1) % NUM_SIDES;
+        }
+        if (ctx->touchRightActive) {
+            ctx->playerSegment = (ctx->playerSegment - 1 + NUM_SIDES) % NUM_SIDES;
+        }
     }
     
     // Fire control - only trigger on initial touch, not continuous
