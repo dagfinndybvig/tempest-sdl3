@@ -23,11 +23,26 @@ The project is currently a functional 3D vector-style engine prototype built wit
   - `0-3`: Switch tunnel geometry during gameplay.
   - `S/s`: Toggle sound effects on/off (case-insensitive).
   - **Touch Controls (Web only)**:
-    - Left 30% of screen: Rotate counter-clockwise
-    - Right 30% of screen: Rotate clockwise
-    - Bottom center: Fire shots
-    - Bottom right: Superzapper
-    - Tap on landing/game over screens: Start/restart with touch controls
+    - **Circular Swipe Gestures**: Implemented using SDL3 touch events with vector angle calculation
+    - **Swipe Detection Algorithm**:
+      - Converts touch coordinates to center-relative position
+      - Calculates swipe vector using `atan2f(deltaY, deltaX)` for angle determination
+      - Left swipes (45°-135° angles): Counter-clockwise rotation
+      - Right swipes (-45° to 45° or 135°-180° angles): Clockwise rotation
+      - Minimum 50px distance from center required to register swipe
+    - **Tap Controls**:
+      - Center area (40-60% width/height): Fire shots
+      - Bottom-right corner (70-100% X, 80-100% Y): Superzapper activation
+    - **State Management**:
+      - `lastTouchX/Y`: Track previous touch position for vector calculation
+      - `isSwiping`: Boolean flag to prevent multiple swipe detections per gesture
+      - Touch controls toggle via tap during gameplay
+    - **Visual Feedback**:
+      - Blue circular ring (40% of screen size) indicates swipe area
+      - Red inner circle (30% of swipe radius) shows fire zone
+      - Directional labels: "CW" (clockwise), "CCW" (counter-clockwise)
+      - Green corner rectangle for Superzapper with "ZAP" label
+    - **Activation**: Tap anywhere on landing/game over screens to enable touch controls
 - **Enemy System**: 
   - Enemies are rendered as green "X" shapes.
   - They spawn at the far end of the tunnel and move toward the player.
@@ -76,24 +91,42 @@ The project is currently a functional 3D vector-style engine prototype built wit
 
 ### Touch Controls Implementation
 
-The touch control system uses SDL3's touch events (`SDL_EVENT_FINGER_DOWN`, `SDL_EVENT_FINGER_MOTION`, `SDL_EVENT_FINGER_UP`) and includes:
+The touch control system uses SDL3's touch events (`SDL_EVENT_FINGER_DOWN`, `SDL_EVENT_FINGER_MOTION`, `SDL_EVENT_FINGER_UP`) and implements circular swipe gestures for intuitive rotation control.
 
 #### Event Handling
 - Touch positions are normalized to [0,1] range and converted to screen coordinates
-- Touch zones are defined as percentages of screen width/height for responsiveness
-- Continuous touch detection for rotation zones
-- Edge-triggered detection for fire/superzapper buttons
+- **Swipe Gesture Detection**:
+  - Converts absolute touch coordinates to center-relative position
+  - Calculates swipe vector using `atan2f(deltaY, deltaX)` for angle determination
+  - Left swipes (45°-135°): Counter-clockwise rotation
+  - Right swipes (-45° to 45° or 135°-180°): Clockwise rotation
+  - Minimum 50px distance from center required to register swipe
+- **Tap Detection**:
+  - Center area (40-60% screen): Fire shots (edge-triggered)
+  - Bottom-right corner: Superzapper activation (edge-triggered)
 
 #### State Management
 - `ctx->showTouchControls`: Boolean flag indicating touch controls are active
-- `ctx->touchLeftActive`, `ctx->touchRightActive`, etc.: Current touch zone states
+- `ctx->touchLeftActive`, `ctx->touchRightActive`: Rotation direction states
+- `ctx->touchFireActive`, `ctx->touchSuperzapperActive`: Action button states
+- `ctx->lastTouchX/Y`: Previous touch position for vector calculation
+- `ctx->isSwiping`: Boolean flag to prevent multiple swipe detections per gesture
 - Touch controls are automatically activated on landing page tap
 - Keyboard start (Arrow Up) explicitly disables touch controls
 
 #### Visual Feedback
-- Semi-transparent colored rectangles for touch zones
-- Text labels using `SDL_RenderDebugText`
+- **Circular Swipe Area**: Blue ring (40% of screen size) drawn using parametric line segments
+- **Fire Zone**: Red inner circle (30% of swipe radius)
+- **Direction Indicators**: "CW" and "CCW" labels with directional arrows
+- **Superzapper Button**: Green corner rectangle with "ZAP" label
+- **Text Labels**: "SWIPE TO ROTATE", "TAP TO FIRE" using `SDL_RenderDebugText`
 - Yellow color for touch messages to distinguish from other UI elements
+
+#### Mathematical Implementation
+- **Angle Calculation**: `atan2f(deltaY, deltaX)` determines swipe direction
+- **Distance Calculation**: `sqrtf(x² + y²)` for minimum swipe distance check
+- **Parametric Circles**: `x = centerX + radius * cos(angle)`, `y = centerY + radius * sin(angle)`
+- **Angle Ranges**: 0.785f (45°) to 2.356f (135°) radians for left swipe detection
 
 ### Coordinate System
 - **Z-Axis**: `z=0` is at the viewer. The tunnel rim where the player sits is currently around `z=2.0`. Higher `z` values are further "into" the screen.
