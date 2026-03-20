@@ -18,6 +18,7 @@ An experimental 3D vector-style engine built with C and SDL3, compiled to WebAss
 - **Custom Vector HUD**: Retro-style digit rendering for score and status.
 - **Persistent Highscores**: Native version saves to `highscores.txt`, web version uses browser localStorage.
 - **Sound Effects**: Five sound effects (laserzap, explosion, percussion, coin, shotburst) that play by default.
+- **Touch Controls (Web)**: Experimental touch controls for mobile devices (see notes below).
 
 ## How to Build and Run
 
@@ -49,26 +50,33 @@ The web version is automatically built to the `docs/` directory. Simply push to 
 - **S Key**: (Removed - sound now plays by default)
 - **Arrow Up (↑)**: Start game from landing page or restart from game over screen.
 
-### Touch Controls (Web Version Only)
+### Touch Controls (Web Version Only) ⚠️
 The game features optional touch controls for mobile devices:
 
-**Touch Controls (Circular Swipe):**
-- **Circular Swipe Left**: Counter-clockwise rotation (swipe left around center)
-- **Circular Swipe Right**: Clockwise rotation (swipe right around center)
-- **Tap Center Area**: Fire shots (single shot per tap)
-- **Bottom Right Corner**: Activate Superzapper (single activation per tap)
+**Current Implementation (Simplified):**
+- **Left Swipe**: Clockwise rotation (matches left arrow key)
+- **Right Swipe**: Counter-clockwise rotation (matches right arrow key)
+- **Tap Anywhere**: Fire shots (single shot per tap release)
+- **Rotation Speed**: Much slower (20% of original) for better precision
 
 **Activation:**
 - **Landing Page**: Tap anywhere to start the game with touch controls active
 - **Game Over Screen**: Tap anywhere to restart the game with touch controls active
-- **During Gameplay**: Tap anywhere to toggle touch controls on/off
+- **During Gameplay**: Touch controls are always active when enabled
 
-**Visual Feedback:**
-- Blue circular ring shows swipe area for rotation
-- Red inner circle shows tap area for firing
-- Direction indicators: "CW" (clockwise), "CCW" (counter-clockwise)
-- Green corner button for Superzapper with "ZAP" label
-- Yellow status messages show when touch controls are active
+**Status:**
+- ⚠️ **Experimental**: Touch controls are implemented but may require further refinement
+- ✅ **Fixed**: Web compatibility issues with static variables resolved
+- 🔄 **Simplified**: Circular swipe gestures replaced with simpler left/right swipes
+- 🐛 **Testing Needed**: Real-world mobile device testing required
+
+**Known Limitations:**
+- Rotation speed and swipe sensitivity may need adjustment
+- No visual touch indicators in current simplified version
+- Touch controls may feel different from keyboard controls
+
+**Previous Complex Implementation:**
+The game previously had circular swipe gestures with visual indicators (blue ring, red fire zone, etc.) but this was simplified to improve reliability and fix web compatibility issues.
 
 ### Sound Control
 - **Sound Control**: Sound effects now play by default (users can control volume through system/browser settings)

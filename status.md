@@ -4,11 +4,11 @@ The Tempest was a play by W. Shakespeare that featured the wizard Prospero.
 
 This document tracks the current implementation status and provides technical guidance for future development of the Tempest SDL3 prototype.
 
-## 🚀 Current Implementation
+## 🚀 Current Implementation (as of 2024)
 
-The project is currently a functional 3D vector-style engine prototype built with C and SDL3. It features:
+The project is a functional Tempest-inspired 3D vector-style game built with C and SDL3. Current status:
 
-### 1. Rendering Engine
+### 1. Core Gameplay ✅
 - **3D Perspective Projection**: A custom `Project` function handles the conversion of 3D coordinates `(x, y, z)` to 2D screen coordinates.
 - **Tunnel Geometry**: A procedurally generated 16-segment tunnel with receding rings. The tunnel uses a "neon-on-black" palette with depth-based color fading.
 - **Vector Aesthetics**: Uses SDL3's rendering API with additive blending (`SDL_BLENDMODE_ADD`) to simulate the "glow" of classic vector monitors.
@@ -81,9 +81,34 @@ The project is currently a functional 3D vector-style engine prototype built wit
 - **Conditional Compilation**: Touch code only compiled in web version (`#ifdef __EMSCRIPTEN__`).
 - **Sound Control**: S key toggles sound in both native and web versions.
 
-### 3. Build & Platform Support
+### 3. Build & Platform Support ✅
 - **Native**: Compiles with GCC on Linux (`-lSDL3 -lm`).
 - **WebAssembly**: Ready for Emscripten via `build.sh`.
+
+### 4. Touch Controls (Web Version) ⚠️
+
+**Status**: Touch controls are implemented but may require further refinement based on user testing.
+
+#### Current Implementation
+- **Simplified Controls**: Left/right swipes for rotation, tap anywhere to fire
+- **Rotation Direction**: 
+  - Left swipe = Clockwise (matches left arrow key)
+  - Right swipe = Counter-clockwise (matches right arrow key)
+- **Firing**: Single shot per tap release with 200ms cooldown
+- **Rotation Speed**: 20% of original speed (much slower for precision)
+- **State Management**: Uses context struct variables for web compatibility
+
+#### Known Issues & Limitations
+- **Web Compatibility**: Initially used static variables which don't work in WebAssembly
+- **Fixed**: Moved all state to AppContext struct for proper persistence
+- **Testing Required**: Real-world mobile device testing needed
+- **Potential Improvements**: May need adjustment to swipe sensitivity and rotation speed
+
+#### Technical Implementation
+- **Swipe Detection**: Horizontal movement only (30px minimum)
+- **Tap Detection**: Any tap not detected as swipe triggers firing
+- **State Variables**: `rotationFrameCounter`, `wasTouching`, `fireTriggered`, `lastFireTime`
+- **Initialization**: Properly reset in `ResetGame()` function
 
 ---
 
@@ -91,42 +116,36 @@ The project is currently a functional 3D vector-style engine prototype built wit
 
 ### Touch Controls Implementation
 
-The touch control system uses SDL3's touch events (`SDL_EVENT_FINGER_DOWN`, `SDL_EVENT_FINGER_MOTION`, `SDL_EVENT_FINGER_UP`) and implements circular swipe gestures for intuitive rotation control.
+**Important**: Static variables in `MainLoop()` don't work in WebAssembly builds! Always use context struct.
+
+#### Current Working Implementation
+- **Swipe Detection**: Left/right horizontal swipes only (simplified from circular)
+- **Rotation**: 1 segment every 5 frames (20% speed)
+- **Firing**: Edge-triggered on tap release with cooldown
+- **State**: All variables in `AppContext` struct for web compatibility
 
 #### Event Handling
-- Touch positions are normalized to [0,1] range and converted to screen coordinates
-- **Swipe Gesture Detection**:
-  - Converts absolute touch coordinates to center-relative position
-  - Calculates swipe vector using `atan2f(deltaY, deltaX)` for angle determination
-  - Left swipes (45°-135°): Counter-clockwise rotation
-  - Right swipes (-45° to 45° or 135°-180°): Clockwise rotation
-  - Minimum 50px distance from center required to register swipe
-- **Tap Detection**:
-  - Center area (40-60% screen): Fire shots (edge-triggered)
-  - Bottom-right corner: Superzapper activation (edge-triggered)
+- `SDL_EVENT_FINGER_DOWN`: Start tracking touch position
+- `SDL_EVENT_FINGER_MOTION`: Detect swipe direction (left/right)
+- `SDL_EVENT_FINGER_UP`: Reset swipe state
+- **Swipe Logic**: 30px minimum horizontal movement to register
 
-#### State Management
-- `ctx->showTouchControls`: Boolean flag indicating touch controls are active
-- `ctx->touchLeftActive`, `ctx->touchRightActive`: Rotation direction states
-- `ctx->touchFireActive`, `ctx->touchSuperzapperActive`: Action button states
-- `ctx->lastTouchX/Y`: Previous touch position for vector calculation
-- `ctx->isSwiping`: Boolean flag to prevent multiple swipe detections per gesture
-- Touch controls are automatically activated on landing page tap
-- Keyboard start (Arrow Up) explicitly disables touch controls
+#### State Variables (in AppContext)
+```c
+int rotationFrameCounter;  // For slow rotation
+bool wasTouching;         // Tap detection
+bool fireTriggered;       // Prevent multiple fires
+Uint64 lastFireTime;      // Cooldown timing
+```
 
-#### Visual Feedback
-- **Circular Swipe Area**: Blue ring (40% of screen size) drawn using parametric line segments
-- **Fire Zone**: Red inner circle (30% of swipe radius)
-- **Direction Indicators**: "CW" and "CCW" labels with directional arrows
-- **Superzapper Button**: Green corner rectangle with "ZAP" label
-- **Text Labels**: "SWIPE TO ROTATE", "TAP TO FIRE" using `SDL_RenderDebugText`
-- Yellow color for touch messages to distinguish from other UI elements
-
-#### Mathematical Implementation
-- **Angle Calculation**: `atan2f(deltaY, deltaX)` determines swipe direction
-- **Distance Calculation**: `sqrtf(x² + y²)` for minimum swipe distance check
-- **Parametric Circles**: `x = centerX + radius * cos(angle)`, `y = centerY + radius * sin(angle)`
-- **Angle Ranges**: 0.785f (45°) to 2.356f (135°) radians for left swipe detection
+#### Initialization
+Must be reset in `ResetGame()`:
+```c
+ctx->rotationFrameCounter = 0;
+ctx->wasTouching = false;
+ctx->fireTriggered = false;
+ctx->lastFireTime = 0;
+```
 
 ### Coordinate System
 - **Z-Axis**: `z=0` is at the viewer. The tunnel rim where the player sits is currently around `z=2.0`. Higher `z` values are further "into" the screen.
