@@ -17,7 +17,7 @@ An experimental 3D vector-style engine built with C and SDL3, compiled to WebAss
 - **Gameplay Systems**: Scoring, player lives, Superzapper, and Game Over states.
 - **Custom Vector HUD**: Retro-style digit rendering for score and status.
 - **Persistent Highscores**: Native version saves to `highscores.txt`, web version uses browser localStorage.
-- **Sound Effects**: Five sound effects (laserzap, explosion, percussion, coin, shotburst) with toggle functionality.
+- **Sound Effects**: Five sound effects (laserzap, explosion, percussion, coin, shotburst) that play by default.
 
 ## How to Build and Run
 
@@ -46,7 +46,7 @@ The web version is automatically built to the `docs/` directory. Simply push to 
 - **Z**: Activate the Superzapper (once per game - clears all enemies).
 - **R**: Reset the game after a Game Over.
 - **0–3 Keys**: Switch tunnel geometry while playing. `0` enables the irregular, in-tunnel variant with ±25% angle jitter, `1` selects the circular tunnel, `2` switches to the square tunnel, and `3` activates the dynamic "flat" tunnel with wobble and tilt. During Game Over you can also press any of those keys to restart directly in that geometry.
-- **S Key**: Toggle sound effects on/off (case-insensitive).
+- **S Key**: (Removed - sound now plays by default)
 - **Arrow Up (↑)**: Start game from landing page or restart from game over screen.
 
 ### Touch Controls (Web Version Only)
@@ -69,8 +69,7 @@ The game features optional touch controls for mobile devices:
 - Yellow status messages show when touch controls are active
 
 ### Sound Control
-- **S Key**: Toggle sound effects on/off (works in both keyboard and touch modes)
-- **Status Indicator**: Shows "S TO TOGGLE SOUND" or current sound state at bottom of screen
+- **Sound Control**: Sound effects now play by default (users can control volume through system/browser settings)
 
 ## License
 MIT License - feel free to experiment with the code!

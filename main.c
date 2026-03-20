@@ -470,18 +470,7 @@ static void DrawLandingPage(AppContext* ctx, int w, int h) {
     SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 220);
     DrawGlyphString(ctx->renderer, prompt, ((float)w - promptWidth) * 0.5f, h * 0.82f, promptSize, promptSpacing);
 
-    // Dynamic sound toggle hint
-    SDL_SetRenderScale(ctx->renderer, 1.5f, 1.5f);
-    SDL_SetRenderDrawColor(ctx->renderer, 150, 150, 150, 200);
-    const char* hint = "S TO TOGGLE SOUND";
-    if (ctx->audio.stream && SDL_AudioStreamDevicePaused(ctx->audio.stream)) {
-        hint = "S TO ENABLE SOUND";
-    } else {
-        hint = "S TO MUTE SOUND";
-    }
-    float hx = ((float)w / 1.5f - (float)strlen(hint) * 8.0f) * 0.5f;
-    float hy = (float)h * 0.95f / 1.5f;
-    SDL_RenderDebugText(ctx->renderer, hx, hy, hint);
+    // Sound is always enabled - no toggle UI needed
     
     // Touch controls activation message (web only)
 #ifdef __EMSCRIPTEN__
@@ -970,19 +959,7 @@ void DrawHUD(AppContext* ctx, int w, int h) {
         SDL_RenderLine(ctx->renderer, 25, 40, 25, 50); // Small "+"
     }
 
-    // Dynamic sound toggle hint in HUD (small, at bottom)
-    SDL_SetRenderScale(ctx->renderer, 1.0f, 1.0f);
-    SDL_SetRenderDrawColor(ctx->renderer, 100, 100, 100, 150);
-    const char* hint = "S TO TOGGLE SOUND";
-    if (ctx->audio.stream && SDL_AudioStreamDevicePaused(ctx->audio.stream)) {
-        hint = "S TO ENABLE SOUND";
-    } else {
-        hint = "S TO MUTE SOUND";
-    }
-    // Draw at bottom right, small
-    float hx = (float)w - (float)strlen(hint) * 8.0f - 10.0f;
-    float hy = (float)h - 20.0f;
-    SDL_RenderDebugText(ctx->renderer, hx, hy, hint);
+    // Sound is always enabled - no toggle UI needed
 
     // Draw touch controls for web version
 #ifdef __EMSCRIPTEN__
@@ -1266,18 +1243,6 @@ void MainLoop(void* arg) {
 #endif
 
         if (event.type == SDL_EVENT_KEY_DOWN) {
-            // S key toggles sound (works in all states) - case insensitive
-            if ((event.key.scancode == SDL_SCANCODE_S || event.key.key == 's' || event.key.key == 'S') && ctx->audio.stream) {
-                printf("S key pressed - toggling sound\n");
-                if (SDL_AudioStreamDevicePaused(ctx->audio.stream)) {
-                    SDL_ResumeAudioStreamDevice(ctx->audio.stream);
-                    printf("Sound enabled\n");
-                } else {
-                    SDL_PauseAudioStreamDevice(ctx->audio.stream);
-                    printf("Sound muted\n");
-                }
-                continue; // Don't start game, just toggle sound
-            }
             
             if (ctx->state == STATE_LANDING) {
                 // Only Arrow Up starts the game with keyboard controls
@@ -1787,9 +1752,7 @@ int main(int argc, char* argv[]) {
         if (!LoadAndConvertWAV("shotburst.wav", &targetSpec, &ctx.audio.wavs[WAV_SHOTBURST])) fprintf(stderr, "Failed shotburst\n");
         
         PlayWav(&ctx.audio, WAV_PERCUSSION, true);
-#ifndef __EMSCRIPTEN__
         SDL_ResumeAudioStreamDevice(ctx.audio.stream);
-#endif
     }
     
     ctx.running = true;
