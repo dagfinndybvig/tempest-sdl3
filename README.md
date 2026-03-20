@@ -52,11 +52,11 @@ The web version is automatically built to the `docs/` directory. Simply push to 
 ### Touch Controls (Web Version Only)
 The game features optional touch controls for mobile devices:
 
-**Touch Zones:**
-- **Left 30% of screen**: Rotate counter-clockwise (continuous while touching)
-- **Right 30% of screen**: Rotate clockwise (continuous while touching)
-- **Bottom Center (30-70%)**: Fire shots (single shot per tap)
-- **Bottom Right (70-100%)**: Activate Superzapper (single activation per tap)
+**Touch Controls (Circular Swipe):**
+- **Circular Swipe Left**: Counter-clockwise rotation (swipe left around center)
+- **Circular Swipe Right**: Clockwise rotation (swipe right around center)
+- **Tap Center Area**: Fire shots (single shot per tap)
+- **Bottom Right Corner**: Activate Superzapper (single activation per tap)
 
 **Activation:**
 - **Landing Page**: Tap anywhere to start the game with touch controls active
@@ -64,8 +64,10 @@ The game features optional touch controls for mobile devices:
 - **During Gameplay**: Tap anywhere to toggle touch controls on/off
 
 **Visual Feedback:**
-- Semi-transparent colored zones show active touch areas
-- Text labels indicate zone functions: "<<<", ">>>", "FIRE", "ZAP"
+- Blue circular ring shows swipe area for rotation
+- Red inner circle shows tap area for firing
+- Direction indicators: "CW" (clockwise), "CCW" (counter-clockwise)
+- Green corner button for Superzapper with "ZAP" label
 - Yellow status messages show when touch controls are active
 
 ### Sound Control

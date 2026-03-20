@@ -142,6 +142,10 @@ typedef struct {
     bool showTouchControls;
     bool highscoreEntryPending; // Track if we have a pending highscore entry
     bool touchOnlyMode; // True if running on a touch-only device
+    
+    // Circular swipe gesture tracking
+    float lastTouchX, lastTouchY; // For swipe detection
+    bool isSwiping; // Whether we're in a swipe gesture
 } AppContext;
 
 typedef struct {
@@ -964,31 +968,46 @@ void DrawHUD(AppContext* ctx, int w, int h) {
     // Draw touch controls for web version
 #ifdef __EMSCRIPTEN__
     if (ctx->showTouchControls) {
-        // Left touch zone indicator
-        SDL_SetRenderDrawColor(ctx->renderer, 0, 100, 200, 100);
-        SDL_FRect leftZone = {0.0f, 0.0f, w * 0.3f, (float)h};
-        SDL_RenderFillRect(ctx->renderer, &leftZone);
+        // Draw circular swipe area indicator
+        SDL_SetRenderDrawColor(ctx->renderer, 0, 100, 200, 80);
+        float centerX = w * 0.5f;
+        float centerY = h * 0.5f;
+        float radius = fmin(w, h) * 0.4f;
         
-        // Right touch zone indicator  
-        SDL_FRect rightZone = {w * 0.7f, 0.0f, w * 0.3f, (float)h};
-        SDL_RenderFillRect(ctx->renderer, &rightZone);
+        // Draw outer circle
+        for (float angle = 0; angle < 2 * M_PI; angle += 0.1f) {
+            float x1 = centerX + radius * cosf(angle);
+            float y1 = centerY + radius * sinf(angle);
+            float x2 = centerX + radius * cosf(angle + 0.1f);
+            float y2 = centerY + radius * sinf(angle + 0.1f);
+            SDL_RenderLine(ctx->renderer, x1, y1, x2, y2);
+        }
         
-        // Fire button
-        SDL_SetRenderDrawColor(ctx->renderer, 200, 0, 0, 150);
-        SDL_FRect fireZone = {w * 0.3f, h * 0.8f, w * 0.4f, h * 0.2f};
-        SDL_RenderFillRect(ctx->renderer, &fireZone);
+        // Draw inner circle (fire zone)
+        SDL_SetRenderDrawColor(ctx->renderer, 200, 0, 0, 120);
+        float innerRadius = radius * 0.3f;
+        for (float angle = 0; angle < 2 * M_PI; angle += 0.1f) {
+            float x1 = centerX + innerRadius * cosf(angle);
+            float y1 = centerY + innerRadius * sinf(angle);
+            float x2 = centerX + innerRadius * cosf(angle + 0.1f);
+            float y2 = centerY + innerRadius * sinf(angle + 0.1f);
+            SDL_RenderLine(ctx->renderer, x1, y1, x2, y2);
+        }
         
-        // Superzapper button
+        // Superzapper button (keep in corner for easy access)
         SDL_SetRenderDrawColor(ctx->renderer, 0, 200, 0, 150);
         SDL_FRect superZone = {w * 0.7f, h * 0.8f, w * 0.3f, h * 0.2f};
         SDL_RenderFillRect(ctx->renderer, &superZone);
         
         // Draw labels
         SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 255);
-        SDL_RenderDebugText(ctx->renderer, w * 0.15f - 20.0f, h * 0.5f, "<<<");
-        SDL_RenderDebugText(ctx->renderer, w * 0.85f - 20.0f, h * 0.5f, ">>>");
-        SDL_RenderDebugText(ctx->renderer, w * 0.5f - 20.0f, h * 0.85f, "FIRE");
+        SDL_RenderDebugText(ctx->renderer, centerX - 50.0f, centerY - 10.0f, "SWIPE TO ROTATE");
+        SDL_RenderDebugText(ctx->renderer, centerX - 30.0f, centerY + 10.0f, "TAP TO FIRE");
         SDL_RenderDebugText(ctx->renderer, w * 0.85f - 20.0f, h * 0.85f, "ZAP");
+        
+        // Draw swipe direction arrows
+        SDL_RenderDebugText(ctx->renderer, centerX - radius - 40.0f, centerY - 20.0f, "CCW");
+        SDL_RenderDebugText(ctx->renderer, centerX + radius + 10.0f, centerY - 20.0f, "CW");
     }
 #endif
 }
@@ -1222,15 +1241,62 @@ void MainLoop(void* arg) {
                 }
             }
             
-            // Define touch zones for gameplay
-            bool inLeftZone = screenX < w * 0.3;
-            bool inRightZone = screenX > w * 0.7;
-            bool inFireZone = screenY > h * 0.8 && screenX > w * 0.3 && screenX < w * 0.7;
-            bool inSuperzapperZone = screenY > h * 0.8 && screenX > w * 0.7;
+            // Circular swipe gesture detection for gameplay
+            if (ctx->state == STATE_PLAYING) {
+                // Convert touch position to center-relative coordinates
+                float centerX = w * 0.5f;
+                float centerY = h * 0.5f;
+                float relX = screenX - centerX;
+                float relY = screenY - centerY;
+                
+                if (event.type == SDL_EVENT_FINGER_DOWN) {
+                    // Start of potential swipe gesture
+                    ctx->lastTouchX = relX;
+                    ctx->lastTouchY = relY;
+                    ctx->isSwiping = false;
+                    
+                    // Reset rotation controls
+                    ctx->touchLeftActive = false;
+                    ctx->touchRightActive = false;
+                } 
+                else if (event.type == SDL_EVENT_FINGER_MOTION && !ctx->isSwiping) {
+                    // Calculate swipe vector and angle
+                    float currentX = relX;
+                    float currentY = relY;
+                    float prevX = ctx->lastTouchX;
+                    float prevY = ctx->lastTouchY;
+                    
+                    // Calculate angle of swipe vector
+                    float swipeAngle = atan2f(currentY - prevY, currentX - prevX);
+                    
+                    // Calculate distance from center
+                    float distanceFromCenter = sqrtf(relX * relX + relY * relY);
+                    float minSwipeDistance = 50.0f; // Minimum distance to consider as swipe
+                    
+                    if (distanceFromCenter > minSwipeDistance) {
+                        // Determine rotation direction based on swipe angle
+                        // Left swipe (counter-clockwise): angles between 45° and 135°
+                        // Right swipe (clockwise): angles between -45° and 45° or 135° and 180°
+                        if (swipeAngle > 0.785f && swipeAngle < 2.356f) { // ~45° to ~135°
+                            ctx->touchLeftActive = true;
+                            ctx->touchRightActive = false;
+                        } else {
+                            ctx->touchLeftActive = false;
+                            ctx->touchRightActive = true;
+                        }
+                        ctx->isSwiping = true;
+                    }
+                    
+                    // Update last position
+                    ctx->lastTouchX = currentX;
+                    ctx->lastTouchY = currentY;
+                }
+            }
             
-            // Update touch states
-            ctx->touchLeftActive = inLeftZone;
-            ctx->touchRightActive = inRightZone;
+            // Fire control - tap in center area
+            bool inFireZone = (screenX > w * 0.4 && screenX < w * 0.6 && screenY > h * 0.4 && screenY < h * 0.6);
+            bool inSuperzapperZone = (screenX > w * 0.7 && screenY > h * 0.8); // Keep superzapper in corner
+            
             ctx->touchFireActive = inFireZone;
             ctx->touchSuperzapperActive = inSuperzapperZone;
         }
@@ -1239,6 +1305,7 @@ void MainLoop(void* arg) {
             ctx->touchRightActive = false;
             ctx->touchFireActive = false;
             ctx->touchSuperzapperActive = false;
+            ctx->isSwiping = false;
         }
 #endif
 
