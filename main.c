@@ -143,6 +143,12 @@ typedef struct {
     bool highscoreEntryPending; // Track if we have a pending highscore entry
     bool touchOnlyMode; // True if running on a touch-only device
     
+    // Touch control state (moved from static variables for web compatibility)
+    int rotationFrameCounter; // For slow rotation
+    bool wasTouching; // For tap detection
+    bool fireTriggered; // Prevent multiple fires
+    Uint64 lastFireTime; // Cooldown timing
+    
     // Circular swipe gesture tracking
     float lastTouchX, lastTouchY; // For swipe detection
     bool isSwiping; // Whether we're in a swipe gesture
@@ -736,6 +742,12 @@ void ResetGame(AppContext* ctx) {
     for(int i=0; i<MAX_SHOTS; i++) ctx->shots[i].active = false;
     for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
     for(int i=0; i<MAX_BURST_SHOTS; i++) ctx->burstShots[i].active = false;
+    
+    // Initialize touch control state
+    ctx->rotationFrameCounter = 0;
+    ctx->wasTouching = false;
+    ctx->fireTriggered = false;
+    ctx->lastFireTime = 0;
     
     // Clear the pending flag when starting a new game (not continuing with highscore)
     ctx->highscoreEntryPending = false;
@@ -1427,11 +1439,10 @@ void MainLoop(void* arg) {
     // Touch controls logic (web only)
 #ifdef __EMSCRIPTEN__
     // Frame counter for very slow rotation (20% speed = every 5th frame)
-    static int rotationFrameCounter = 0;
-    rotationFrameCounter++;
+    ctx->rotationFrameCounter++;
     
     // Much slower rotation - 20% of original speed
-    if (rotationFrameCounter % 5 == 0) { // Only rotate every 5th frame
+    if (ctx->rotationFrameCounter % 5 == 0) { // Only rotate every 5th frame
         if (ctx->touchLeftActive) {
             ctx->playerSegment = (ctx->playerSegment + 1) % NUM_SIDES;
         }
@@ -1441,30 +1452,26 @@ void MainLoop(void* arg) {
     }
     
     // Tap-to-fire anywhere: detect tap releases (fixed to fire only once)
-    static bool wasTouching = false;
-    static bool fireTriggered = false; // Prevent multiple fires from same tap
-    
     if (!ctx->touchLeftActive && !ctx->touchRightActive && !ctx->isSwiping) {
         // Not swiping, so this could be a tap
-        if (!wasTouching) {
+        if (!ctx->wasTouching) {
             // Touch just started - could be a tap
-            wasTouching = true;
-            fireTriggered = false; // Reset for new tap
+            ctx->wasTouching = true;
+            ctx->fireTriggered = false; // Reset for new tap
         } else {
             // Touch ended - this was a tap, fire! (but only if not already triggered)
-            wasTouching = false;
+            ctx->wasTouching = false;
             
-            if (!fireTriggered) {
-                fireTriggered = true; // Mark as triggered to prevent multiple fires
+            if (!ctx->fireTriggered) {
+                ctx->fireTriggered = true; // Mark as triggered to prevent multiple fires
                 
                 // Fire when tap is released
                 bool shouldFire = false;
                 if (ctx->state == STATE_PLAYING) {
-                    static Uint64 lastFireTime = 0;
                     Uint64 currentTime = SDL_GetTicks();
-                    if (currentTime - lastFireTime > 200) { // 200ms cooldown
+                    if (currentTime - ctx->lastFireTime > 200) { // 200ms cooldown
                         shouldFire = true;
-                        lastFireTime = currentTime;
+                        ctx->lastFireTime = currentTime;
                     }
                 }
                 
@@ -1482,8 +1489,8 @@ void MainLoop(void* arg) {
             }
         }
     } else {
-        wasTouching = false; // Reset if swiping
-        fireTriggered = false;
+        ctx->wasTouching = false; // Reset if swiping
+        ctx->fireTriggered = false;
     }
     
     // Fire control is now handled in the touch controls section above
