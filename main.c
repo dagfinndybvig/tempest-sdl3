@@ -1270,15 +1270,15 @@ void MainLoop(void* arg) {
                     float deltaX = currentX - ctx->lastTouchX;
                     
                     if (fabs(deltaX) > minSwipeDistance) {
-                        // Left swipe (negative X direction)
+                        // Left swipe (negative X direction) = clockwise
                         if (deltaX < -minSwipeDistance) {
-                            ctx->touchLeftActive = true;
-                            ctx->touchRightActive = false;
-                        }
-                        // Right swipe (positive X direction)
-                        else if (deltaX > minSwipeDistance) {
                             ctx->touchLeftActive = false;
-                            ctx->touchRightActive = true;
+                            ctx->touchRightActive = true;  // Right active = clockwise
+                        }
+                        // Right swipe (positive X direction) = counter-clockwise
+                        else if (deltaX > minSwipeDistance) {
+                            ctx->touchLeftActive = true;   // Left active = counter-clockwise
+                            ctx->touchRightActive = false;
                         }
                         ctx->isSwiping = true;
                     }
@@ -1426,50 +1426,64 @@ void MainLoop(void* arg) {
 
     // Touch controls logic (web only)
 #ifdef __EMSCRIPTEN__
-    // Much slower, simpler rotation - just move one segment at a time
-    if (ctx->touchLeftActive) {
-        ctx->playerSegment = (ctx->playerSegment + 1) % NUM_SIDES;
-    }
-    if (ctx->touchRightActive) {
-        ctx->playerSegment = (ctx->playerSegment - 1 + NUM_SIDES) % NUM_SIDES;
+    // Frame counter for very slow rotation (20% speed = every 5th frame)
+    static int rotationFrameCounter = 0;
+    rotationFrameCounter++;
+    
+    // Much slower rotation - 20% of original speed
+    if (rotationFrameCounter % 5 == 0) { // Only rotate every 5th frame
+        if (ctx->touchLeftActive) {
+            ctx->playerSegment = (ctx->playerSegment + 1) % NUM_SIDES;
+        }
+        if (ctx->touchRightActive) {
+            ctx->playerSegment = (ctx->playerSegment - 1 + NUM_SIDES) % NUM_SIDES;
+        }
     }
     
-    // Tap-to-fire anywhere: detect tap releases
+    // Tap-to-fire anywhere: detect tap releases (fixed to fire only once)
     static bool wasTouching = false;
+    static bool fireTriggered = false; // Prevent multiple fires from same tap
+    
     if (!ctx->touchLeftActive && !ctx->touchRightActive && !ctx->isSwiping) {
         // Not swiping, so this could be a tap
         if (!wasTouching) {
             // Touch just started - could be a tap
             wasTouching = true;
+            fireTriggered = false; // Reset for new tap
         } else {
-            // Touch ended - this was a tap, fire!
+            // Touch ended - this was a tap, fire! (but only if not already triggered)
             wasTouching = false;
             
-            // Fire when tap is released
-            bool shouldFire = false;
-            if (ctx->state == STATE_PLAYING) {
-                static Uint64 lastFireTime = 0;
-                Uint64 currentTime = SDL_GetTicks();
-                if (currentTime - lastFireTime > 200) { // 200ms cooldown
-                    shouldFire = true;
-                    lastFireTime = currentTime;
+            if (!fireTriggered) {
+                fireTriggered = true; // Mark as triggered to prevent multiple fires
+                
+                // Fire when tap is released
+                bool shouldFire = false;
+                if (ctx->state == STATE_PLAYING) {
+                    static Uint64 lastFireTime = 0;
+                    Uint64 currentTime = SDL_GetTicks();
+                    if (currentTime - lastFireTime > 200) { // 200ms cooldown
+                        shouldFire = true;
+                        lastFireTime = currentTime;
+                    }
                 }
-            }
-            
-            if (shouldFire) {
-                for(int i=0; i<MAX_SHOTS; i++) {
-                    if(!ctx->shots[i].active) {
-                        ctx->shots[i].active = true;
-                        ctx->shots[i].z = 2.0f;
-                        ctx->shots[i].segment = ctx->playerSegment;
-                        PlayWav(&ctx->audio, WAV_LASERZAP, false);
-                        break;
+                
+                if (shouldFire) {
+                    for(int i=0; i<MAX_SHOTS; i++) {
+                        if(!ctx->shots[i].active) {
+                            ctx->shots[i].active = true;
+                            ctx->shots[i].z = 2.0f;
+                            ctx->shots[i].segment = ctx->playerSegment;
+                            PlayWav(&ctx->audio, WAV_LASERZAP, false);
+                            break;
+                        }
                     }
                 }
             }
         }
     } else {
         wasTouching = false; // Reset if swiping
+        fireTriggered = false;
     }
     
     // Fire control is now handled in the touch controls section above
