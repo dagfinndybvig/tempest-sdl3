@@ -1449,22 +1449,74 @@ void MainLoop(void* arg) {
 
     // Touch controls logic (web only)
 #ifdef __EMSCRIPTEN__
-    // Frame counter for slowing down touch rotation (50% speed)
-    static int touchRotationFrameCounter = 0;
-    touchRotationFrameCounter++;
+    // Smoother time-based rotation with acceleration
+    static Uint64 lastTouchRotationTime = 0;
+    static float touchRotationSpeed = 0.0f;
+    const float TOUCH_ROTATION_ACCEL = 0.05f;
+    const float TOUCH_ROTATION_MAX = 0.7f;
+    const float TOUCH_ROTATION_DECEL = 0.1f;
+    const float TOUCH_ROTATION_MIN = 0.1f;
     
-    if (touchRotationFrameCounter % 2 == 0) { // Only update every 2nd frame (50% speed)
-        if (ctx->touchLeftActive) {
-            ctx->playerSegment = (ctx->playerSegment + 1) % NUM_SIDES;
+    Uint64 currentTime = SDL_GetTicks();
+    
+    // Update rotation speed based on touch input
+    if (ctx->touchLeftActive || ctx->touchRightActive) {
+        // Accelerate rotation
+        touchRotationSpeed += TOUCH_ROTATION_ACCEL;
+        if (touchRotationSpeed > TOUCH_ROTATION_MAX) {
+            touchRotationSpeed = TOUCH_ROTATION_MAX;
         }
-        if (ctx->touchRightActive) {
-            ctx->playerSegment = (ctx->playerSegment - 1 + NUM_SIDES) % NUM_SIDES;
+        lastTouchRotationTime = currentTime;
+    } else {
+        // Decelerate when no touch
+        if (currentTime - lastTouchRotationTime < 200) { // Only decelerate for 200ms after release
+            touchRotationSpeed -= TOUCH_ROTATION_DECEL;
+            if (touchRotationSpeed < 0) touchRotationSpeed = 0;
+        } else {
+            touchRotationSpeed = 0;
         }
     }
     
-    // Fire control - only trigger on initial touch, not continuous
+    // Apply rotation with minimum speed for smoothness
+    if (touchRotationSpeed > TOUCH_ROTATION_MIN || (ctx->touchLeftActive || ctx->touchRightActive)) {
+        float rotationAmount = touchRotationSpeed * (ctx->touchLeftActive ? 1.0f : -1.0f);
+        
+        // Calculate how many segments to rotate based on speed
+        int segmentsToRotate = (int)(rotationAmount);
+        if (segmentsToRotate == 0 && rotationAmount > 0.5f) segmentsToRotate = 1;
+        if (segmentsToRotate == 0 && rotationAmount < -0.5f) segmentsToRotate = -1;
+        
+        if (segmentsToRotate != 0) {
+            ctx->playerSegment = (ctx->playerSegment + segmentsToRotate + NUM_SIDES) % NUM_SIDES;
+        }
+    }
+    
+    // Fire control - improved with minimum touch duration and cooldown
     static bool wasTouchFireActive = false;
-    if (ctx->touchFireActive && !wasTouchFireActive && ctx->state == STATE_PLAYING) {
+    static Uint64 lastFireTime = 0;
+    static Uint64 touchFireStartTime = 0;
+    const Uint64 MIN_TOUCH_DURATION = 50; // 50ms minimum touch to register as intentional
+    const Uint64 FIRE_COOLDOWN = 150; // 150ms cooldown between shots
+    
+    // Start timing when touch begins
+    if (ctx->touchFireActive && !wasTouchFireActive) {
+        touchFireStartTime = currentTime;
+    }
+    
+    // Fire when touch is released after minimum duration, or held for a while
+    bool shouldFire = false;
+    if (ctx->state == STATE_PLAYING) {
+        if ((!ctx->touchFireActive && wasTouchFireActive && (currentTime - touchFireStartTime) >= MIN_TOUCH_DURATION) ||
+            (ctx->touchFireActive && wasTouchFireActive && (currentTime - touchFireStartTime) >= 300)) {
+            // Check cooldown
+            if (currentTime - lastFireTime >= FIRE_COOLDOWN) {
+                shouldFire = true;
+                lastFireTime = currentTime;
+            }
+        }
+    }
+    
+    if (shouldFire) {
         for(int i=0; i<MAX_SHOTS; i++) {
             if(!ctx->shots[i].active) {
                 ctx->shots[i].active = true;
