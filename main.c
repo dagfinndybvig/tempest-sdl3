@@ -1262,27 +1262,21 @@ void MainLoop(void* arg) {
                     ctx->touchRightActive = false;
                 } 
                 else if (event.type == SDL_EVENT_FINGER_MOTION && !ctx->isSwiping) {
-                    // Calculate swipe vector and angle
+                    // Simplified swipe detection: left/right only
                     float currentX = relX;
-                    float currentY = relY;
-                    float prevX = ctx->lastTouchX;
-                    float prevY = ctx->lastTouchY;
+                    float minSwipeDistance = 30.0f; // Minimum horizontal distance for swipe
                     
-                    // Calculate angle of swipe vector
-                    float swipeAngle = atan2f(currentY - prevY, currentX - prevX);
+                    // Calculate horizontal movement
+                    float deltaX = currentX - ctx->lastTouchX;
                     
-                    // Calculate distance from center
-                    float distanceFromCenter = sqrtf(relX * relX + relY * relY);
-                    float minSwipeDistance = 50.0f; // Minimum distance to consider as swipe
-                    
-                    if (distanceFromCenter > minSwipeDistance) {
-                        // Determine rotation direction based on swipe angle
-                        // Left swipe (counter-clockwise): angles between 45° and 135°
-                        // Right swipe (clockwise): angles between -45° and 45° or 135° and 180°
-                        if (swipeAngle > 0.785f && swipeAngle < 2.356f) { // ~45° to ~135°
+                    if (fabs(deltaX) > minSwipeDistance) {
+                        // Left swipe (negative X direction)
+                        if (deltaX < -minSwipeDistance) {
                             ctx->touchLeftActive = true;
                             ctx->touchRightActive = false;
-                        } else {
+                        }
+                        // Right swipe (positive X direction)
+                        else if (deltaX > minSwipeDistance) {
                             ctx->touchLeftActive = false;
                             ctx->touchRightActive = true;
                         }
@@ -1291,34 +1285,17 @@ void MainLoop(void* arg) {
                     
                     // Update last position
                     ctx->lastTouchX = currentX;
-                    ctx->lastTouchY = currentY;
+                    ctx->lastTouchY = relY;
                 }
-            }
-            
-            // Fire control - tap in center area
-            bool inFireZone = (screenX > w * 0.4 && screenX < w * 0.6 && screenY > h * 0.4 && screenY < h * 0.6);
-            bool inSuperzapperZone = (screenX > w * 0.7 && screenY > h * 0.8); // Keep superzapper in corner
-            
-            // Only set fire/superzapper active if we're not in a swipe gesture
-            if (!ctx->isSwiping) {
-                ctx->touchFireActive = inFireZone;
-                ctx->touchSuperzapperActive = inSuperzapperZone;
             }
         }
         if (event.type == SDL_EVENT_FINGER_DOWN) {
-            // On initial touch down, also check fire/superzapper zones
+            // Start tracking touch position
             int w, h;
             SDL_GetWindowSize(ctx->window, &w, &h);
-            int screenX = (int)(event.tfinger.x * w);
-            int screenY = (int)(event.tfinger.y * h);
-            
-            bool inFireZone = (screenX > w * 0.4 && screenX < w * 0.6 && screenY > h * 0.4 && screenY < h * 0.6);
-            bool inSuperzapperZone = (screenX > w * 0.7 && screenY > h * 0.8);
-            
-            if (!ctx->isSwiping) {
-                ctx->touchFireActive = inFireZone;
-                ctx->touchSuperzapperActive = inSuperzapperZone;
-            }
+            ctx->lastTouchX = (int)(event.tfinger.x * w);
+            ctx->lastTouchY = (int)(event.tfinger.y * h);
+            ctx->isSwiping = false;
         }
         if (event.type == SDL_EVENT_FINGER_UP) {
             ctx->touchLeftActive = false;
@@ -1449,85 +1426,54 @@ void MainLoop(void* arg) {
 
     // Touch controls logic (web only)
 #ifdef __EMSCRIPTEN__
-    // Smoother time-based rotation with acceleration
-    static Uint64 lastTouchRotationTime = 0;
-    static float touchRotationSpeed = 0.0f;
-    const float TOUCH_ROTATION_ACCEL = 0.05f;
-    const float TOUCH_ROTATION_MAX = 0.7f;
-    const float TOUCH_ROTATION_DECEL = 0.1f;
-    const float TOUCH_ROTATION_MIN = 0.1f;
+    // Much slower, simpler rotation - just move one segment at a time
+    if (ctx->touchLeftActive) {
+        ctx->playerSegment = (ctx->playerSegment + 1) % NUM_SIDES;
+    }
+    if (ctx->touchRightActive) {
+        ctx->playerSegment = (ctx->playerSegment - 1 + NUM_SIDES) % NUM_SIDES;
+    }
     
-    Uint64 currentTime = SDL_GetTicks();
-    
-    // Update rotation speed based on touch input
-    if (ctx->touchLeftActive || ctx->touchRightActive) {
-        // Accelerate rotation
-        touchRotationSpeed += TOUCH_ROTATION_ACCEL;
-        if (touchRotationSpeed > TOUCH_ROTATION_MAX) {
-            touchRotationSpeed = TOUCH_ROTATION_MAX;
-        }
-        lastTouchRotationTime = currentTime;
-    } else {
-        // Decelerate when no touch
-        if (currentTime - lastTouchRotationTime < 200) { // Only decelerate for 200ms after release
-            touchRotationSpeed -= TOUCH_ROTATION_DECEL;
-            if (touchRotationSpeed < 0) touchRotationSpeed = 0;
+    // Tap-to-fire anywhere: detect tap releases
+    static bool wasTouching = false;
+    if (!ctx->touchLeftActive && !ctx->touchRightActive && !ctx->isSwiping) {
+        // Not swiping, so this could be a tap
+        if (!wasTouching) {
+            // Touch just started - could be a tap
+            wasTouching = true;
         } else {
-            touchRotationSpeed = 0;
-        }
-    }
-    
-    // Apply rotation with minimum speed for smoothness
-    if (touchRotationSpeed > TOUCH_ROTATION_MIN || (ctx->touchLeftActive || ctx->touchRightActive)) {
-        float rotationAmount = touchRotationSpeed * (ctx->touchLeftActive ? 1.0f : -1.0f);
-        
-        // Calculate how many segments to rotate based on speed
-        int segmentsToRotate = (int)(rotationAmount);
-        if (segmentsToRotate == 0 && rotationAmount > 0.5f) segmentsToRotate = 1;
-        if (segmentsToRotate == 0 && rotationAmount < -0.5f) segmentsToRotate = -1;
-        
-        if (segmentsToRotate != 0) {
-            ctx->playerSegment = (ctx->playerSegment + segmentsToRotate + NUM_SIDES) % NUM_SIDES;
-        }
-    }
-    
-    // Fire control - improved with minimum touch duration and cooldown
-    static bool wasTouchFireActive = false;
-    static Uint64 lastFireTime = 0;
-    static Uint64 touchFireStartTime = 0;
-    const Uint64 MIN_TOUCH_DURATION = 50; // 50ms minimum touch to register as intentional
-    const Uint64 FIRE_COOLDOWN = 150; // 150ms cooldown between shots
-    
-    // Start timing when touch begins
-    if (ctx->touchFireActive && !wasTouchFireActive) {
-        touchFireStartTime = currentTime;
-    }
-    
-    // Fire when touch is released after minimum duration, or held for a while
-    bool shouldFire = false;
-    if (ctx->state == STATE_PLAYING) {
-        if ((!ctx->touchFireActive && wasTouchFireActive && (currentTime - touchFireStartTime) >= MIN_TOUCH_DURATION) ||
-            (ctx->touchFireActive && wasTouchFireActive && (currentTime - touchFireStartTime) >= 300)) {
-            // Check cooldown
-            if (currentTime - lastFireTime >= FIRE_COOLDOWN) {
-                shouldFire = true;
-                lastFireTime = currentTime;
+            // Touch ended - this was a tap, fire!
+            wasTouching = false;
+            
+            // Fire when tap is released
+            bool shouldFire = false;
+            if (ctx->state == STATE_PLAYING) {
+                static Uint64 lastFireTime = 0;
+                Uint64 currentTime = SDL_GetTicks();
+                if (currentTime - lastFireTime > 200) { // 200ms cooldown
+                    shouldFire = true;
+                    lastFireTime = currentTime;
+                }
+            }
+            
+            if (shouldFire) {
+                for(int i=0; i<MAX_SHOTS; i++) {
+                    if(!ctx->shots[i].active) {
+                        ctx->shots[i].active = true;
+                        ctx->shots[i].z = 2.0f;
+                        ctx->shots[i].segment = ctx->playerSegment;
+                        PlayWav(&ctx->audio, WAV_LASERZAP, false);
+                        break;
+                    }
+                }
             }
         }
+    } else {
+        wasTouching = false; // Reset if swiping
     }
     
-    if (shouldFire) {
-        for(int i=0; i<MAX_SHOTS; i++) {
-            if(!ctx->shots[i].active) {
-                ctx->shots[i].active = true;
-                ctx->shots[i].z = 2.0f;
-                ctx->shots[i].segment = ctx->playerSegment;
-                PlayWav(&ctx->audio, WAV_LASERZAP, false);
-                break;
-            }
-        }
-    }
-    wasTouchFireActive = ctx->touchFireActive;
+    // Fire control is now handled in the touch controls section above
+    // (tap anywhere to fire)
     
     // Superzapper control
     static bool wasTouchSuperzapperActive = false;
