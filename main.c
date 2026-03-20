@@ -443,7 +443,7 @@ static void DrawLandingPage(AppContext* ctx, int w, int h) {
     const char* touchMessage = NULL;
 #ifdef __EMSCRIPTEN__
     if (ctx->state == STATE_LANDING) {
-        touchMessage = "OR TAP TO START WITH TOUCH CONTROLS";
+        touchMessage = "TAP TO START WITH TOUCH CONTROLS";
     } else if (ctx->showTouchControls) {
         touchMessage = "TOUCH CONTROLS ACTIVE";
     }
@@ -478,10 +478,13 @@ static void DrawLandingPage(AppContext* ctx, int w, int h) {
     // Touch controls activation message (web only)
 #ifdef __EMSCRIPTEN__
     if (touchMessage) {
-        SDL_SetRenderDrawColor(ctx->renderer, 200, 200, 50, 220);
-        float tx = ((float)w / 1.5f - (float)strlen(touchMessage) * 8.0f) * 0.5f;
-        float ty = (float)h * 0.90f / 1.5f;
+        // Use same scale as other controls for consistent font size
+        SDL_SetRenderScale(ctx->renderer, 2.5f, 2.5f);
+        SDL_SetRenderDrawColor(ctx->renderer, 255, 50, 50, 220); // Red color
+        float tx = ((float)w / 2.5f - (float)strlen(touchMessage) * 8.0f) * 0.5f;
+        float ty = (float)h * 0.90f / 2.5f;
         SDL_RenderDebugText(ctx->renderer, tx, ty, touchMessage);
+        SDL_SetRenderScale(ctx->renderer, oldScaleX, oldScaleY); // Restore scale
     }
 #endif
     
