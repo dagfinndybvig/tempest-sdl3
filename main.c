@@ -152,10 +152,6 @@ typedef struct {
     // Circular swipe gesture tracking
     float lastTouchX, lastTouchY; // For swipe detection
     bool isSwiping; // Whether we're in a swipe gesture
-    
-    // Double-tap detection for Superzapper
-    Uint32 lastTapTime; // Timestamp of last tap
-    bool doubleTapDetected; // Flag for double-tap detection
 } AppContext;
 
 typedef struct {
@@ -446,6 +442,7 @@ static void DrawLandingPage(AppContext* ctx, int w, int h) {
     const char* controls[] = {
         "ARROWS TO MOVE LEFT/RIGHT",
         "SPACE TO FIRE",
+        "Z FOR SUPERZAPPER",
     };
     
     // Touch controls activation message (web only)
@@ -752,10 +749,6 @@ void ResetGame(AppContext* ctx) {
     ctx->fireTriggered = false;
     ctx->lastFireTime = 0;
     
-    // Initialize double-tap detection
-    ctx->lastTapTime = 0;
-    ctx->doubleTapDetected = false;
-    
     // Clear the pending flag when starting a new game (not continuing with highscore)
     ctx->highscoreEntryPending = false;
 }
@@ -783,26 +776,16 @@ static void LoadHighScores(AppContext* ctx) {
 #ifdef __EMSCRIPTEN__
     // Web version - use localStorage
     char* json = (char*)EM_ASM_INT({
-        var item = localStorage.getItem('tempestHighScores');
-        if (item === null) return 0;
-        var lengthBytes = lengthBytesUTF8(item) + 1;
-        var buffer = _malloc(lengthBytes);
-        stringToUTF8(item, buffer, lengthBytes);
-        return buffer;
+        return localStorage.getItem('tempestHighScores') || '';
     });
     
-    if (json) {
+    if (json && strlen(json) > 0) {
         // Simple JSON parser for our specific format
         char* ptr = json;
         int scoreIndex = 0;
         
         // Skip opening bracket
-        if (*ptr != '[') {
-            // Invalid JSON format, use defaults
-            free(json);
-            goto use_defaults;
-        }
-        ptr++;
+        if (*ptr == '[') ptr++;
         
         while (*ptr && scoreIndex < MAX_HIGHSCORES) {
             // Skip whitespace and commas
@@ -813,27 +796,24 @@ static void LoadHighScores(AppContext* ctx) {
                 
                 // Extract name
                 char* nameStart = strstr(ptr, "\"name\":");
-                if (!nameStart) break;
-                nameStart += 8; // Skip "name":"
-                char* nameEnd = strchr(nameStart, '"');
-                if (!nameEnd) break;
-                
-                // Ensure we don't overflow the name buffer
-                int nameLength = nameEnd - nameStart;
-                if (nameLength >= (int)sizeof(ctx->highScores[scoreIndex].name) - 1) {
-                    nameLength = sizeof(ctx->highScores[scoreIndex].name) - 2;
+                if (nameStart) {
+                    nameStart += 8; // Skip "name":"
+                    char* nameEnd = strchr(nameStart, '"');
+                    if (nameEnd) {
+                        strncpy(ctx->highScores[scoreIndex].name, nameStart, nameEnd - nameStart);
+                        ctx->highScores[scoreIndex].name[nameEnd - nameStart] = '\0';
+                        ptr = nameEnd + 1;
+                    }
                 }
-                strncpy(ctx->highScores[scoreIndex].name, nameStart, nameLength);
-                ctx->highScores[scoreIndex].name[nameLength] = '\0';
-                ptr = nameEnd + 1;
                 
                 // Extract score
                 char* scoreStart = strstr(ptr, "\"score\":");
-                if (!scoreStart) break;
-                scoreStart += 8; // Skip "score":
-                ctx->highScores[scoreIndex].score = atoi(scoreStart);
-                ptr = scoreStart;
-                while (*ptr && *ptr != '}' && *ptr != ',') ptr++;
+                if (scoreStart) {
+                    scoreStart += 8; // Skip "score":
+                    ctx->highScores[scoreIndex].score = atoi(scoreStart);
+                    ptr = scoreStart;
+                    while (*ptr && *ptr != '}' && *ptr != ',') ptr++;
+                }
                 
                 scoreIndex++;
             } else {
@@ -842,7 +822,6 @@ static void LoadHighScores(AppContext* ctx) {
         }
         free(json);
     } else {
-    use_defaults:
         // Fallback to default scores
         for (int i = 0; i < MAX_HIGHSCORES; i++) {
             sprintf(ctx->highScores[i].name, "PROSPERO");
@@ -1302,21 +1281,16 @@ void MainLoop(void* arg) {
                     // Calculate horizontal movement
                     float deltaX = currentX - ctx->lastTouchX;
                     
-                    // Debug output for swipe detection
-                    printf("DeltaX: %.2f, minSwipeDistance: %.2f\n", deltaX, minSwipeDistance);
-                    
                     if (fabs(deltaX) > minSwipeDistance) {
-                        // Left swipe (negative X direction) = counter-clockwise
+                        // Left swipe (negative X direction) = clockwise
                         if (deltaX < -minSwipeDistance) {
-                            ctx->touchLeftActive = true;   // Left active = counter-clockwise
-                            ctx->touchRightActive = false;
-                            printf("Left swipe detected: touchLeftActive = true\n");
-                        }
-                        // Right swipe (positive X direction) = clockwise
-                        else if (deltaX > minSwipeDistance) {
                             ctx->touchLeftActive = false;
                             ctx->touchRightActive = true;  // Right active = clockwise
-                            printf("Right swipe detected: touchRightActive = true\n");
+                        }
+                        // Right swipe (positive X direction) = counter-clockwise
+                        else if (deltaX > minSwipeDistance) {
+                            ctx->touchLeftActive = true;   // Left active = counter-clockwise
+                            ctx->touchRightActive = false;
                         }
                         ctx->isSwiping = true;
                     }
@@ -1341,21 +1315,14 @@ void MainLoop(void* arg) {
             ctx->touchFireActive = false;
             ctx->touchSuperzapperActive = false;
             ctx->isSwiping = false;
-            
-            // Double-tap detection for Superzapper
-            Uint32 currentTime = SDL_GetTicks();
-            if (currentTime - ctx->lastTapTime < 300) { // 300ms window for double-tap
-                ctx->doubleTapDetected = true;
-            }
-            ctx->lastTapTime = currentTime;
         }
 #endif
 
         if (event.type == SDL_EVENT_KEY_DOWN) {
             
             if (ctx->state == STATE_LANDING) {
-                // Arrow Up or ANY key starts the game with keyboard controls
-                if (event.key.scancode == SDL_SCANCODE_UP || !event.key.repeat) {
+                // Only Arrow Up starts the game with keyboard controls
+                if (event.key.scancode == SDL_SCANCODE_UP) {
 #ifdef __EMSCRIPTEN__
                     ctx->showTouchControls = false;
 #endif
@@ -1363,8 +1330,8 @@ void MainLoop(void* arg) {
                     ResetGame(ctx);
                     continue;
                 }
-                // Ignore repeated keys on landing page
-                if (event.key.repeat) continue;
+                // All other keys ignored on landing page
+                continue;
             }
             if (ctx->state == STATE_GAMEOVER) {
                 // Try to restart with a specific shape (0-3 keys)
@@ -1420,7 +1387,12 @@ void MainLoop(void* arg) {
                     }
                 }
             }
-
+            if (event.key.scancode == SDL_SCANCODE_Z && !ctx->superzapperUsed) {
+                ctx->superzapperUsed = true;
+                ctx->flashTimer = 10;
+                for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
+                PlayWav(&ctx->audio, WAV_EXPLOSION, false);
+            }
             
             // Handle high score display with integrated name entry
             if (ctx->state == STATE_HIGHSCORE_DISPLAY) {
@@ -1472,11 +1444,9 @@ void MainLoop(void* arg) {
     // Much slower rotation - 20% of original speed
     if (ctx->rotationFrameCounter % 5 == 0) { // Only rotate every 5th frame
         if (ctx->touchLeftActive) {
-            printf("Applying counter-clockwise rotation\n");
             ctx->playerSegment = (ctx->playerSegment + 1) % NUM_SIDES;
         }
         if (ctx->touchRightActive) {
-            printf("Applying clockwise rotation\n");
             ctx->playerSegment = (ctx->playerSegment - 1 + NUM_SIDES) % NUM_SIDES;
         }
     }
@@ -1526,14 +1496,15 @@ void MainLoop(void* arg) {
     // Fire control is now handled in the touch controls section above
     // (tap anywhere to fire)
     
-    // Superzapper control (double-tap)
-    if (ctx->doubleTapDetected && !ctx->superzapperUsed && ctx->state == STATE_PLAYING) {
+    // Superzapper control
+    static bool wasTouchSuperzapperActive = false;
+    if (ctx->touchSuperzapperActive && !wasTouchSuperzapperActive && !ctx->superzapperUsed && ctx->state == STATE_PLAYING) {
         ctx->superzapperUsed = true;
         ctx->flashTimer = 10;
         for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
         PlayWav(&ctx->audio, WAV_EXPLOSION, false);
     }
-    ctx->doubleTapDetected = false; // Reset after checking
+    wasTouchSuperzapperActive = ctx->touchSuperzapperActive;
 #endif
 
     if (ctx->state == STATE_PLAYING) {

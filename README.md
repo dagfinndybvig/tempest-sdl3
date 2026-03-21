@@ -4,7 +4,7 @@
 
 # Tempest SDL3 Prototype
 
-An experimental 3D vector-style engine built with C and SDL3, compiled to WebAssembly via Emscripten. This project is inspired by *Tempest*, the classic 1980s arcade game named after Shakespeare's play *The Tempest*, which features the wizard Prospero.
+An experimental 3D vector-style engine built with C and SDL3, compiled to WebAssembly via Emscripten.
 
 ## ⚠️ Project Status
 **This is an experimental project inspired by the classic arcade game *Tempest*.** It is **not** a direct port or a recreation of the original game code. It aims to capture the "Vector Glow" aesthetic and the unique 3D tunnel perspective using modern hardware-accelerated rendering.
@@ -44,7 +44,7 @@ The web version is automatically built to the `docs/` directory. Simply push to 
 ### Keyboard Controls (Native & Web)
 - **Left / Right Arrow Keys**: Rotate the Blaster around the tunnel rim.
 - **Space**: Fire shots down the tunnel.
-
+- **Z**: Activate the Superzapper (once per game - clears all enemies).
 - **R**: Reset the game after a Game Over.
 - **0–3 Keys**: Switch tunnel geometry while playing. `0` enables the irregular, in-tunnel variant with ±25% angle jitter, `1` selects the circular tunnel, `2` switches to the square tunnel, and `3` activates the dynamic "flat" tunnel with wobble and tilt. During Game Over you can also press any of those keys to restart directly in that geometry.
 - **S Key**: (Removed - sound now plays by default)
