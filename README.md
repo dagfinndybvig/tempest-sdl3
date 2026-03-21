@@ -4,7 +4,7 @@
 
 # Tempest SDL3 Prototype
 
-An experimental 3D vector-style engine built with C and SDL3, compiled to WebAssembly via Emscripten. This project is inspired by *Tempest*, the classic 1980s arcade game named after Shakespeare's play *The Tempest*.
+An experimental 3D vector-style engine built with C and SDL1, compiled to WebAssembly via Emscripten. This project is inspired by *Tempest*, the classic 1980s arcade game named after Shakespeare's play *The Tempest*.
 
 ## ⚠️ Project Status
 **This is an experimental project inspired by the classic arcade game *Tempest*.** It is **not** a direct port or a recreation of the original game code. It aims to capture the "Vector Glow" aesthetic and the unique 3D tunnel perspective using modern hardware-accelerated rendering.
