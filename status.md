@@ -19,30 +19,18 @@ The project is a functional Tempest-inspired 3D vector-style game built with C a
 - **Controls**: 
   - `Left / Right Arrow`: Rotate the Blaster around the tunnel rim.
   - `Space`: Fire red shots down the tunnel segments.
-  - `Z`: Trigger Superzapper (one-time screen clear).
   - `R`: Reset game.
   - `0-3`: Switch tunnel geometry during gameplay.
   - `S/s`: Toggle sound effects on/off (case-insensitive).
   - **Touch Controls (Web only)**:
-    - **Circular Swipe Gestures**: Implemented using SDL3 touch events with vector angle calculation
-    - **Swipe Detection Algorithm**:
-      - Converts touch coordinates to center-relative position
-      - Calculates swipe vector using `atan2f(deltaY, deltaX)` for angle determination
-      - Left swipes (45°-135° angles): Counter-clockwise rotation
-      - Right swipes (-45° to 45° or 135°-180° angles): Clockwise rotation
-      - Minimum 50px distance from center required to register swipe
-    - **Tap Controls**:
-      - Center area (40-60% width/height): Fire shots
-      - Bottom-right corner (70-100% X, 80-100% Y): Superzapper activation
-    - **State Management**:
-      - `lastTouchX/Y`: Track previous touch position for vector calculation
-      - `isSwiping`: Boolean flag to prevent multiple swipe detections per gesture
-      - Touch controls toggle via tap during gameplay
-    - **Visual Feedback**:
-      - Blue circular ring (40% of screen size) indicates swipe area
-      - Red inner circle (30% of swipe radius) shows fire zone
-      - Directional labels: "CW" (clockwise), "CCW" (counter-clockwise)
-      - Green corner rectangle for Superzapper with "ZAP" label
+    - **Simplified Swipe Controls**: Left/right swipes for rotation
+    - **Swipe Detection**:
+      - Left swipe: Counter-clockwise rotation (matches left arrow key)
+      - Right swipe: Clockwise rotation (matches right arrow key)
+      - Minimum 30px horizontal movement required
+    - **Double-Tap Activation**: Double-tap anywhere to trigger Superzapper
+    - **Tap-to-Fire**: Single tap anywhere to fire shots
+    - **Rotation Speed**: 20% of original speed for precision
     - **Activation**: Tap anywhere on landing/game over screens to enable touch controls
 - **Enemy System**: 
   - Enemies are rendered as green "X" shapes.
@@ -85,6 +73,33 @@ The project is a functional Tempest-inspired 3D vector-style game built with C a
 ### 3. Build & Platform Support ✅
 - **Native**: Compiles with GCC on Linux (`-lSDL3 -lm`).
 - **WebAssembly**: Ready for Emscripten via `build.sh`.
+
+### 4. Touch Controls (Web Version) ⚠️
+
+**Status**: Touch controls are implemented but may require further refinement based on user testing.
+
+#### Recent Changes
+- **Double-Tap Superzapper**: Replaced the `Z` key with double-tap activation for Superzapper.
+- **Simplified Swipe Controls**: Left/right swipes for rotation, tap anywhere to fire.
+- **Removed Onscreen Indicators**: No more visual touch zones or labels.
+
+### 5. Development Environment Setup
+
+A local Emscripten installation script (`setup_emscripten.sh`) has been added to the repository root. This script:
+- Downloads and installs Emscripten without requiring `sudo`
+- Sets up environment variables for the current shell session
+- Verifies the installation with `emcc --version`
+
+**Usage**:
+```bash
+./setup_emscripten.sh
+source emsdk/emsdk_env.sh
+./build_web.sh
+```
+
+This allows developers to rebuild the web version locally without system-wide installation.
+
+---
 
 ### 4. Touch Controls (Web Version) ⚠️
 
@@ -186,7 +201,7 @@ For explosions when enemies are hit, implement a simple particle system:
 - [x] Add automatic tunnel geometry changes every 8 enemy kills.
 - [x] Implement game speed multiplier that increases with each kill.
 - [ ] Add "Spikers" that leave trails behind them.
-- [x] Implement the "Superzapper" (screen-clear ability).
+- [x] Implement the "Superzapper" (screen-clear ability) with double-tap activation.
 - [x] Implement persistent highscore system with file I/O (native) and localStorage (web).
 - [x] Add integrated name entry directly in highscore display.
 - [x] Update visual design to match landing page style (glowing red heading, neon green scores).
