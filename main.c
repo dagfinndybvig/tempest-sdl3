@@ -152,6 +152,10 @@ typedef struct {
     // Circular swipe gesture tracking
     float lastTouchX, lastTouchY; // For swipe detection
     bool isSwiping; // Whether we're in a swipe gesture
+    
+    // Double-tap detection for Superzapper
+    Uint32 lastTapTime; // Timestamp of last tap
+    bool doubleTapDetected; // Flag for double-tap detection
 } AppContext;
 
 typedef struct {
@@ -442,7 +446,6 @@ static void DrawLandingPage(AppContext* ctx, int w, int h) {
     const char* controls[] = {
         "ARROWS TO MOVE LEFT/RIGHT",
         "SPACE TO FIRE",
-        "Z FOR SUPERZAPPER",
     };
     
     // Touch controls activation message (web only)
@@ -748,6 +751,10 @@ void ResetGame(AppContext* ctx) {
     ctx->wasTouching = false;
     ctx->fireTriggered = false;
     ctx->lastFireTime = 0;
+    
+    // Initialize double-tap detection
+    ctx->lastTapTime = 0;
+    ctx->doubleTapDetected = false;
     
     // Clear the pending flag when starting a new game (not continuing with highscore)
     ctx->highscoreEntryPending = false;
@@ -1320,6 +1327,13 @@ void MainLoop(void* arg) {
             ctx->touchFireActive = false;
             ctx->touchSuperzapperActive = false;
             ctx->isSwiping = false;
+            
+            // Double-tap detection for Superzapper
+            Uint32 currentTime = SDL_GetTicks();
+            if (currentTime - ctx->lastTapTime < 300) { // 300ms window for double-tap
+                ctx->doubleTapDetected = true;
+            }
+            ctx->lastTapTime = currentTime;
         }
 #endif
 
@@ -1392,12 +1406,7 @@ void MainLoop(void* arg) {
                     }
                 }
             }
-            if (event.key.scancode == SDL_SCANCODE_Z && !ctx->superzapperUsed) {
-                ctx->superzapperUsed = true;
-                ctx->flashTimer = 10;
-                for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
-                PlayWav(&ctx->audio, WAV_EXPLOSION, false);
-            }
+
             
             // Handle high score display with integrated name entry
             if (ctx->state == STATE_HIGHSCORE_DISPLAY) {
@@ -1503,15 +1512,14 @@ void MainLoop(void* arg) {
     // Fire control is now handled in the touch controls section above
     // (tap anywhere to fire)
     
-    // Superzapper control
-    static bool wasTouchSuperzapperActive = false;
-    if (ctx->touchSuperzapperActive && !wasTouchSuperzapperActive && !ctx->superzapperUsed && ctx->state == STATE_PLAYING) {
+    // Superzapper control (double-tap)
+    if (ctx->doubleTapDetected && !ctx->superzapperUsed && ctx->state == STATE_PLAYING) {
         ctx->superzapperUsed = true;
         ctx->flashTimer = 10;
         for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
         PlayWav(&ctx->audio, WAV_EXPLOSION, false);
     }
-    wasTouchSuperzapperActive = ctx->touchSuperzapperActive;
+    ctx->doubleTapDetected = false; // Reset after checking
 #endif
 
     if (ctx->state == STATE_PLAYING) {
