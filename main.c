@@ -797,7 +797,12 @@ static void LoadHighScores(AppContext* ctx) {
         int scoreIndex = 0;
         
         // Skip opening bracket
-        if (*ptr == '[') ptr++;
+        if (*ptr != '[') {
+            // Invalid JSON format, use defaults
+            free(json);
+            goto use_defaults;
+        }
+        ptr++;
         
         while (*ptr && scoreIndex < MAX_HIGHSCORES) {
             // Skip whitespace and commas
@@ -808,34 +813,36 @@ static void LoadHighScores(AppContext* ctx) {
                 
                 // Extract name
                 char* nameStart = strstr(ptr, "\"name\":");
-                if (nameStart) {
-                    nameStart += 8; // Skip "name":"
-                    char* nameEnd = strchr(nameStart, '"');
-                    if (nameEnd) {
-                        strncpy(ctx->highScores[scoreIndex].name, nameStart, nameEnd - nameStart);
-                        ctx->highScores[scoreIndex].name[nameEnd - nameStart] = '\0';
-                        ptr = nameEnd + 1;
-                    }
+                if (!nameStart) break;
+                nameStart += 8; // Skip "name":"
+                char* nameEnd = strchr(nameStart, '"');
+                if (!nameEnd) break;
+                
+                // Ensure we don't overflow the name buffer
+                int nameLength = nameEnd - nameStart;
+                if (nameLength >= (int)sizeof(ctx->highScores[scoreIndex].name) - 1) {
+                    nameLength = sizeof(ctx->highScores[scoreIndex].name) - 2;
                 }
+                strncpy(ctx->highScores[scoreIndex].name, nameStart, nameLength);
+                ctx->highScores[scoreIndex].name[nameLength] = '\0';
+                ptr = nameEnd + 1;
                 
                 // Extract score
                 char* scoreStart = strstr(ptr, "\"score\":");
-                if (scoreStart) {
-                    scoreStart += 8; // Skip "score":
-                    ctx->highScores[scoreIndex].score = atoi(scoreStart);
-                    ptr = scoreStart;
-                    while (*ptr && *ptr != '}' && *ptr != ',') ptr++;
-                }
+                if (!scoreStart) break;
+                scoreStart += 8; // Skip "score":
+                ctx->highScores[scoreIndex].score = atoi(scoreStart);
+                ptr = scoreStart;
+                while (*ptr && *ptr != '}' && *ptr != ',') ptr++;
                 
                 scoreIndex++;
             } else {
                 break;
             }
         }
-        if (json) {
-            free(json);
-        }
+        free(json);
     } else {
+    use_defaults:
         // Fallback to default scores
         for (int i = 0; i < MAX_HIGHSCORES; i++) {
             sprintf(ctx->highScores[i].name, "PROSPERO");
