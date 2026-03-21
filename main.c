@@ -1282,15 +1282,15 @@ void MainLoop(void* arg) {
                     float deltaX = currentX - ctx->lastTouchX;
                     
                     if (fabs(deltaX) > minSwipeDistance) {
-                        // Left swipe (negative X direction) = clockwise
+                        // Left swipe (negative X direction) = counter-clockwise
                         if (deltaX < -minSwipeDistance) {
-                            ctx->touchLeftActive = false;
-                            ctx->touchRightActive = true;  // Right active = clockwise
-                        }
-                        // Right swipe (positive X direction) = counter-clockwise
-                        else if (deltaX > minSwipeDistance) {
                             ctx->touchLeftActive = true;   // Left active = counter-clockwise
                             ctx->touchRightActive = false;
+                        }
+                        // Right swipe (positive X direction) = clockwise
+                        else if (deltaX > minSwipeDistance) {
+                            ctx->touchLeftActive = false;
+                            ctx->touchRightActive = true;  // Right active = clockwise
                         }
                         ctx->isSwiping = true;
                     }
