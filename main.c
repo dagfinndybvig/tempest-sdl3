@@ -783,7 +783,12 @@ static void LoadHighScores(AppContext* ctx) {
 #ifdef __EMSCRIPTEN__
     // Web version - use localStorage
     char* json = (char*)EM_ASM_INT({
-        return localStorage.getItem('tempestHighScores') || '';
+        var item = localStorage.getItem('tempestHighScores');
+        if (item === null) return 0;
+        var lengthBytes = lengthBytesUTF8(item) + 1;
+        var buffer = _malloc(lengthBytes);
+        stringToUTF8(item, buffer, lengthBytes);
+        return buffer;
     });
     
     if (json && strlen(json) > 0) {
