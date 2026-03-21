@@ -1,4 +1,4 @@
-Based on an arcade classic
+Originally Atari. Based on an arcade classic
 
 
 # Tempest SDL3 Prototype - Project Status
