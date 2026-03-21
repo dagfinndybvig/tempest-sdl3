@@ -1281,16 +1281,21 @@ void MainLoop(void* arg) {
                     // Calculate horizontal movement
                     float deltaX = currentX - ctx->lastTouchX;
                     
+                    // Debug output for swipe detection
+                    printf("DeltaX: %.2f, minSwipeDistance: %.2f\n", deltaX, minSwipeDistance);
+                    
                     if (fabs(deltaX) > minSwipeDistance) {
                         // Left swipe (negative X direction) = counter-clockwise
                         if (deltaX < -minSwipeDistance) {
                             ctx->touchLeftActive = true;   // Left active = counter-clockwise
                             ctx->touchRightActive = false;
+                            printf("Left swipe detected: touchLeftActive = true\n");
                         }
                         // Right swipe (positive X direction) = clockwise
                         else if (deltaX > minSwipeDistance) {
                             ctx->touchLeftActive = false;
                             ctx->touchRightActive = true;  // Right active = clockwise
+                            printf("Right swipe detected: touchRightActive = true\n");
                         }
                         ctx->isSwiping = true;
                     }
@@ -1444,9 +1449,11 @@ void MainLoop(void* arg) {
     // Much slower rotation - 20% of original speed
     if (ctx->rotationFrameCounter % 5 == 0) { // Only rotate every 5th frame
         if (ctx->touchLeftActive) {
+            printf("Applying counter-clockwise rotation\n");
             ctx->playerSegment = (ctx->playerSegment + 1) % NUM_SIDES;
         }
         if (ctx->touchRightActive) {
+            printf("Applying clockwise rotation\n");
             ctx->playerSegment = (ctx->playerSegment - 1 + NUM_SIDES) % NUM_SIDES;
         }
     }
