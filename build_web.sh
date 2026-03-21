@@ -1,7 +1,15 @@
 #!/bin/bash
-# Ensure emsdk is in path if needed (user-specific, but keeping it for context)
-if [ -f ~/emsdk/emsdk_env.sh ]; then
+# Check if emsdk is available locally first
+if [ -f emsdk/emsdk_env.sh ]; then
+    echo "Using local emsdk installation..."
+    source emsdk/emsdk_env.sh
+elif [ -f ~/emsdk/emsdk_env.sh ]; then
+    echo "Using system-wide emsdk installation..."
     source ~/emsdk/emsdk_env.sh
+else
+    echo "ERROR: Emscripten not found. Please install Emscripten first."
+    echo "See EMSDK_SETUP.md for installation instructions."
+    exit 1
 fi
 
 mkdir -p docs

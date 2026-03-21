@@ -29,6 +29,7 @@ An experimental 3D vector-style engine built with C and SDL3, compiled to WebAss
 ```
 
 ### Web Version (Local Testing)
+First, install Emscripten (see EMSDK_SETUP.md for detailed instructions):
 ```bash
 ./build_web.sh
 # Then serve the docs directory:
