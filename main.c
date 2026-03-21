@@ -791,7 +791,7 @@ static void LoadHighScores(AppContext* ctx) {
         return buffer;
     });
     
-    if (json && strlen(json) > 0) {
+    if (json) {
         // Simple JSON parser for our specific format
         char* ptr = json;
         int scoreIndex = 0;
@@ -832,7 +832,9 @@ static void LoadHighScores(AppContext* ctx) {
                 break;
             }
         }
-        free(json);
+        if (json) {
+            free(json);
+        }
     } else {
         // Fallback to default scores
         for (int i = 0; i < MAX_HIGHSCORES; i++) {
