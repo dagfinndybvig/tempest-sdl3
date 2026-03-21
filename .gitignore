@@ -1,5 +1,27 @@
+# Build artifacts
+*.o
+*.exe
 tempest
-highscores.txt
-*.pid
-*.log
-build/
+
+# Web build output
+docs/index.html
+docs/index.js
+docs/index.wasm
+docs/index.data
+
+# Emscripten SDK (too large for git, install locally)
+emsdk/
+
+# IDE/Editor files
+.vscode/
+.idea/
+*.swp
+
+# Test files
+test_highscores.html
+
+# macOS files
+.DS_Store
+
+# Windows files
+Thumbs.db

@@ -22,9 +22,9 @@ Then you can build the web version:
 ./build_web.sh
 ```
 
-## Option 2: Local Emscripten Installation
+## Option 2: Local Emscripten Installation (Recommended for this project)
 
-If you prefer to keep Emscripten local to this project:
+This is the recommended approach for this project. The build script automatically detects local emsdk installations:
 
 ```bash
 # Clone emsdk into this directory
@@ -36,6 +36,17 @@ git pull
 source ./emsdk_env.sh
 cd ..
 ```
+
+**Note:** The `emsdk/` directory is intentionally not tracked in git (it's ~1.8GB). Each developer should install it locally once.
+
+## Using the Local Installation
+
+Once installed, you can build anytime:
+```bash
+./build_web.sh
+```
+
+The script automatically detects and uses the local `emsdk/` directory.
 
 ## Build Scripts
 
