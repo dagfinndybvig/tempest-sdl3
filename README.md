@@ -23,10 +23,13 @@ An experimental 3D vector-style engine built with C and SDL3, compiled to WebAss
 ## How to Build and Run
 
 ### Native Version (Linux)
+The native version requires SDL3, which may need to be built from source:
 ```bash
 ./build_native.sh
 ./tempest
 ```
+
+**Note:** If you get SDL3 not found errors, see `SDL3_BUILD.md` for instructions on building SDL3 from source.
 
 ### Web Version (Local Testing)
 First, install Emscripten (see EMSDK_SETUP.md for detailed instructions):
