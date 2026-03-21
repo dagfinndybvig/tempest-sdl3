@@ -1354,8 +1354,8 @@ void MainLoop(void* arg) {
         if (event.type == SDL_EVENT_KEY_DOWN) {
             
             if (ctx->state == STATE_LANDING) {
-                // Only Arrow Up starts the game with keyboard controls
-                if (event.key.scancode == SDL_SCANCODE_UP) {
+                // Arrow Up or ANY key starts the game with keyboard controls
+                if (event.key.scancode == SDL_SCANCODE_UP || !event.key.repeat) {
 #ifdef __EMSCRIPTEN__
                     ctx->showTouchControls = false;
 #endif
@@ -1363,8 +1363,8 @@ void MainLoop(void* arg) {
                     ResetGame(ctx);
                     continue;
                 }
-                // All other keys ignored on landing page
-                continue;
+                // Ignore repeated keys on landing page
+                if (event.key.repeat) continue;
             }
             if (ctx->state == STATE_GAMEOVER) {
                 // Try to restart with a specific shape (0-3 keys)

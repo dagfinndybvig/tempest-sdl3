@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tempest SDL3</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: black;
+        }
+        #canvas {
+            display: block;
+            width: 100%;
+            height: 100vh;
+        }
+        #instructions {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 18px;
+            text-align: center;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 20px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="instructions">
+        Click on the game to focus, then press UP arrow to start<br>
+        Or tap anywhere on mobile devices
+    </div>
+    <canvas id="canvas"></canvas>
+    
+    <script>
+        // Load the Emscripten module
+        var Module = {
+            canvas: document.getElementById('canvas'),
+            onRuntimeInitialized: function() {
+                // Focus the canvas when clicked
+                Module.canvas.addEventListener('click', function() {
+                    Module.canvas.focus();
+                });
+                
+                // Also try to focus automatically
+                setTimeout(function() {
+                    Module.canvas.focus();
+                }, 1000);
+            }
+        };
+        
+        // Load the main module
+        var script = document.createElement('script');
+        script.src = 'index.js';
+        document.body.appendChild(script);
+    </script>
+</body>
+</html>
