@@ -1774,6 +1774,7 @@ int main(int argc, char* argv[]) {
     ctx.running = true;
     ctx.state = STATE_LANDING;
     ResetGame(&ctx);
+    printf("Game started in LANDING state - press UP arrow to begin\n");
 
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop_arg(MainLoop, &ctx, 0, 1);
