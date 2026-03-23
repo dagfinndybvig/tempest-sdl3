@@ -1743,8 +1743,22 @@ int main(int argc, char* argv[]) {
     }
     AppContext ctx = {0};
     ctx.selectedTunnelShape = TUNNEL_CIRCLE;
-    ctx.window = SDL_CreateWindow("Tempest SDL2", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 800, 0);
+    ctx.window = SDL_CreateWindow("Tempest SDL2", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 800, SDL_WINDOW_SHOWN);
+    if (!ctx.window) {
+        fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
+        SDL_Quit();
+        return 1;
+    }
+    printf("Window created successfully\n");
+    
     ctx.renderer = SDL_CreateRenderer(ctx.window, -1, SDL_RENDERER_ACCELERATED);
+    if (!ctx.renderer) {
+        fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
+        SDL_DestroyWindow(ctx.window);
+        SDL_Quit();
+        return 1;
+    }
+    printf("Renderer created successfully\n");
     
     // Initialize touch controls for web version
 #ifdef __EMSCRIPTEN__
@@ -1779,10 +1793,20 @@ int main(int argc, char* argv[]) {
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop_arg(MainLoop, &ctx, 0, 1);
 #else
+    int frameCount = 0;
+    Uint32 startTime = SDL_GetTicks();
     while (ctx.running) {
         MainLoop(&ctx);
+        frameCount++;
+        
+        // Print status every 100 frames
+        if (frameCount % 100 == 0) {
+            printf("Frame %d, state: %d, time: %d ms\n", frameCount, ctx.state, SDL_GetTicks() - startTime);
+        }
+        
         SDL_Delay(1); // Minimal delay to prevent 100% CPU usage
     }
+    printf("Main loop exited after %d frames\n", frameCount);
 #endif
     // Audio cleanup - disabled for SDL2 version
     // if (ctx.audio.stream) SDL_DestroyAudioStream(ctx.audio.stream);
