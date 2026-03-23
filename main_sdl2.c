@@ -1737,7 +1737,10 @@ static bool LoadAndConvertWAV(const char* filename, const SDL_AudioSpec* targetS
 
 int main(int argc, char* argv[]) {
     srand((unsigned int)time(NULL));
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) return 1;
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
+        fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+        return 1;
+    }
     AppContext ctx = {0};
     ctx.selectedTunnelShape = TUNNEL_CIRCLE;
     ctx.window = SDL_CreateWindow("Tempest SDL2", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 800, 0);
