@@ -1,14 +1,7 @@
-It was also made into a movie by Peter Greenaway, who called it Prospero's Books.
-
->>>>>>> Stashed changes
-=======
 The Tempest was a play by W. Shakespeare that featured the wizard Prospero.
 
 It was also made into a movie by Peter Greenaway, who called it Prospero's Books.
-=======
-It was also made into a movie by Peter Greenaway, who called it Prospero's Books.
 
->>>>>>> Stashed changes
 # Tempest SDL3 Prototype - Project Status
 
 This document tracks the current implementation status and provides technical guidance for future development of the Tempest SDL3 prototype.
@@ -177,7 +170,7 @@ For explosions when enemies are hit, implement a simple particle system:
 3. Update and draw them in `MainLoop`.
 
 ### Optimization Tips
-- The current collision detection is $O(N 	imes M)$ where $N$ is shots and $M$ is enemies. Since both are small (10 and 5), this is fine, but consider spatial partitioning if increasing counts significantly.
+- The current collision detection is $O(N \times M)$ where $N$ is shots and $M$ is enemies. Since both are small (10 and 5), this is fine, but consider spatial partitioning if increasing counts significantly.
 - Use `SDL_RenderLines` (plural) for batching line draws if performance becomes a bottleneck on low-end hardware.
 
 ---
