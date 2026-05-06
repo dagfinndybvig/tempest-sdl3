@@ -780,6 +780,15 @@ static void ContinueGameWithSelectedGeometry(AppContext* ctx) {
 }
 
 static void LoadHighScores(AppContext* ctx) {
+    // Always seed defaults FIRST so malformed/short/corrupt persistent data
+    // can never leave zero-filled slots showing as "     0 " with empty
+    // names. The parser/file-load below overwrites slots that successfully
+    // load.
+    for (int i = 0; i < MAX_HIGHSCORES; i++) {
+        sprintf(ctx->highScores[i].name, "PROSPERO");
+        ctx->highScores[i].score = 500 - (i * 100);
+    }
+
 #ifdef __EMSCRIPTEN__
     // Web version - use localStorage. EM_ASM_PTR returns a heap pointer to a
     // UTF-8 string that we own and must free(). The previous code used
@@ -838,27 +847,28 @@ static void LoadHighScores(AppContext* ctx) {
             }
         }
         free(json);
-    } else {
-        // Fallback to default scores
-        for (int i = 0; i < MAX_HIGHSCORES; i++) {
-            sprintf(ctx->highScores[i].name, "PROSPERO");
-            ctx->highScores[i].score = 500 - (i * 100);
-        }
     }
+    // (No else: defaults are already seeded above.)
 #else
-    // Native version - use file I/O
+    // Native version - use file I/O. Defaults are already seeded above.
     FILE* f = fopen("highscores.txt", "rb");
     if (f) {
         fread(ctx->highScores, sizeof(HighScoreEntry), MAX_HIGHSCORES, f);
         fclose(f);
-    } else {
-        // Initialize with default high scores (top 5)
-        for (int i = 0; i < MAX_HIGHSCORES; i++) {
+    }
+#endif
+
+    // Validate every loaded slot. Defensive: if load produced an empty name
+    // or non-positive score (e.g. truncated file, partial JSON), fall back
+    // to the default for that row instead of showing "     0 ".
+    for (int i = 0; i < MAX_HIGHSCORES; i++) {
+        if (ctx->highScores[i].name[0] == '\0' || ctx->highScores[i].score <= 0) {
             sprintf(ctx->highScores[i].name, "PROSPERO");
             ctx->highScores[i].score = 500 - (i * 100);
         }
+        // Ensure null termination even after memcpy.
+        ctx->highScores[i].name[sizeof(ctx->highScores[i].name) - 1] = '\0';
     }
-#endif
 }
 
 static void SaveHighScores(AppContext* ctx) {
