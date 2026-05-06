@@ -812,8 +812,13 @@ static void LoadHighScores(AppContext* ctx) {
                     nameStart += 8; // Skip "name":"
                     char* nameEnd = strchr(nameStart, '"');
                     if (nameEnd) {
-                        strncpy(ctx->highScores[scoreIndex].name, nameStart, nameEnd - nameStart);
-                        ctx->highScores[scoreIndex].name[nameEnd - nameStart] = '\0';
+                        size_t len = (size_t)(nameEnd - nameStart);
+                        // Clamp to buffer size - 1 to avoid overflow if localStorage
+                        // was tampered with or corrupted.
+                        size_t maxLen = sizeof(ctx->highScores[scoreIndex].name) - 1;
+                        if (len > maxLen) len = maxLen;
+                        memcpy(ctx->highScores[scoreIndex].name, nameStart, len);
+                        ctx->highScores[scoreIndex].name[len] = '\0';
                         ptr = nameEnd + 1;
                     }
                 }
@@ -858,13 +863,28 @@ static void LoadHighScores(AppContext* ctx) {
 
 static void SaveHighScores(AppContext* ctx) {
 #ifdef __EMSCRIPTEN__
-    // Web version - use localStorage with JSON serialization
+    // Web version - use localStorage with JSON serialization. Sanitize the
+    // name so a tampered localStorage entry (or any future widening of the
+    // input charset) cannot break out of the JSON string. Allowed chars are
+    // letters, digits, space, and hyphen -- everything else becomes '_'.
     char json[512];
     sprintf(json, "[");
     for (int i = 0; i < MAX_HIGHSCORES; i++) {
         if (i > 0) strcat(json, ",");
+        char safeName[sizeof(ctx->highScores[i].name)];
+        size_t k = 0;
+        for (size_t j = 0; j < sizeof(safeName) - 1 && ctx->highScores[i].name[j]; j++) {
+            unsigned char c = (unsigned char)ctx->highScores[i].name[j];
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                (c >= '0' && c <= '9') || c == ' ' || c == '-') {
+                safeName[k++] = (char)c;
+            } else {
+                safeName[k++] = '_';
+            }
+        }
+        safeName[k] = '\0';
         char entry[128];
-        sprintf(entry, "{\"name\":\"%s\",\"score\":%d}", ctx->highScores[i].name, ctx->highScores[i].score);
+        snprintf(entry, sizeof(entry), "{\"name\":\"%s\",\"score\":%d}", safeName, ctx->highScores[i].score);
         strcat(json, entry);
     }
     strcat(json, "]");
