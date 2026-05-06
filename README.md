@@ -50,33 +50,18 @@ The web version is automatically built to the `docs/` directory. Simply push to 
 - **S Key**: (Removed - sound now plays by default)
 - **Arrow Up (↑)**: Start game from landing page or restart from game over screen.
 
-### Touch Controls (Web Version Only) ⚠️
-The game features optional touch controls for mobile devices:
+### Touch Controls (Web Version)
+The game uses **hold-zones with multi-touch** so the player can rotate and fire simultaneously:
 
-**Current Implementation (Simplified):**
-- **Left Swipe**: Clockwise rotation (matches left arrow key)
-- **Right Swipe**: Counter-clockwise rotation (matches right arrow key)
-- **Tap Anywhere**: Fire shots (single shot per tap release)
-- **Rotation Speed**: Much slower (20% of original) for better precision
+- **Left third of screen (hold)**: Rotate counter-clockwise.
+- **Right third of screen (hold)**: Rotate clockwise.
+- **Bottom-right corner (~25%×25%, tap)**: Activate the Superzapper (one per game).
+- **Anywhere else (short tap)**: Fire a shot. Tap is detected on finger-up if the finger moved less than ~25 px and was held under ~350 ms.
+- **Landing / Game Over / High-score screens**: Tap anywhere to advance.
 
-**Activation:**
-- **Landing Page**: Tap anywhere to start the game with touch controls active
-- **Game Over Screen**: Tap anywhere to restart the game with touch controls active
-- **During Gameplay**: Touch controls are always active when enabled
+Each finger is tracked independently via `SDL_FingerID`, so holding the rotation zone with one thumb while tapping fire with the other works as expected. The on-screen overlay shows the zones (`<<` / `>>` / `ZAP` / `TAP TO FIRE`).
 
-**Status:**
-- ⚠️ **Experimental**: Touch controls are implemented but may require further refinement
-- ✅ **Fixed**: Web compatibility issues with static variables resolved
-- 🔄 **Simplified**: Circular swipe gestures replaced with simpler left/right swipes
-- 🐛 **Testing Needed**: Real-world mobile device testing required
-
-**Known Limitations:**
-- Rotation speed and swipe sensitivity may need adjustment
-- No visual touch indicators in current simplified version
-- Touch controls may feel different from keyboard controls
-
-**Previous Complex Implementation:**
-The game previously had circular swipe gestures with visual indicators (blue ring, red fire zone, etc.) but this was simplified to improve reliability and fix web compatibility issues.
+Synthesised mouse events from mobile browsers are suppressed for ~500 ms after any finger event so a single tap doesn't double-trigger.
 
 ### Sound Control
 - **Sound Control**: Sound effects now play by default (users can control volume through system/browser settings)

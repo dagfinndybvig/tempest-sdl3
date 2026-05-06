@@ -24,27 +24,13 @@ The project is a functional Tempest-inspired 3D vector-style game built with C a
   - `R`: Reset game.
   - `0-3`: Switch tunnel geometry during gameplay.
   - `S/s`: Toggle sound effects on/off (case-insensitive).
-  - **Touch Controls (Web only)**:
-    - **Circular Swipe Gestures**: Implemented using SDL3 touch events with vector angle calculation
-    - **Swipe Detection Algorithm**:
-      - Converts touch coordinates to center-relative position
-      - Calculates swipe vector using `atan2f(deltaY, deltaX)` for angle determination
-      - Left swipes (45°-135° angles): Counter-clockwise rotation
-      - Right swipes (-45° to 45° or 135°-180° angles): Clockwise rotation
-      - Minimum 50px distance from center required to register swipe
-    - **Tap Controls**:
-      - Center area (40-60% width/height): Fire shots
-      - Bottom-right corner (70-100% X, 80-100% Y): Superzapper activation
-    - **State Management**:
-      - `lastTouchX/Y`: Track previous touch position for vector calculation
-      - `isSwiping`: Boolean flag to prevent multiple swipe detections per gesture
-      - Touch controls toggle via tap during gameplay
-    - **Visual Feedback**:
-      - Blue circular ring (40% of screen size) indicates swipe area
-      - Red inner circle (30% of swipe radius) shows fire zone
-      - Directional labels: "CW" (clockwise), "CCW" (counter-clockwise)
-      - Green corner rectangle for Superzapper with "ZAP" label
-    - **Activation**: Tap anywhere on landing/game over screens to enable touch controls
+  - **Touch Controls (Web only)**: Hold-zone model with multi-touch (per-finger tracking via `SDL_FingerID`).
+    - Left third of screen held = rotate counter-clockwise.
+    - Right third of screen held = rotate clockwise.
+    - Bottom-right corner (~25%×25%) tap = Superzapper (edge-triggered on finger-down).
+    - Short tap anywhere else = fire (edge-triggered on finger-up; <25 px movement, <350 ms).
+    - Landing / Game Over / High-score: tap anywhere to advance.
+    - Synthesised mouse events suppressed within 500 ms of any finger event.
 - **Enemy System**: 
   - Enemies are rendered as green "X" shapes.
   - They spawn at the far end of the tunnel and move toward the player.
@@ -70,84 +56,56 @@ The project is a functional Tempest-inspired 3D vector-style game built with C a
 - **Indicators**: Visual feedback for remaining lives and Superzapper availability.
 
 ### 4. Touch Controls (Web Version)
-- **Optional Activation**: Touch controls are optional and activated by user choice.
-- **Landing Page**: Shows "PRESS UP TO START" and "OR TAP TO START WITH TOUCH CONTROLS".
-- **Game Over Screen**: Shows "PRESS UP TO RESTART" and "OR TAP TO RESTART WITH TOUCH CONTROLS".
+- **Hold-zone model** with per-finger tracking (`SDL_FingerID`); multi-touch lets the player rotate and fire simultaneously.
 - **Touch Zones**:
-  - Left 30% of screen: Rotate counter-clockwise (continuous)
-  - Right 30% of screen: Rotate clockwise (continuous)
-  - Bottom center (30-70%): Fire shots (edge-triggered)
-  - Bottom right (70-100%): Superzapper (edge-triggered)
-- **Visual Feedback**: Semi-transparent colored zones with text labels ("<<<", ">>>", "FIRE", "ZAP").
-- **Toggle During Gameplay**: Screen tap toggles touch controls on/off.
-- **Conditional Compilation**: Touch code only compiled in web version (`#ifdef __EMSCRIPTEN__`).
+  - Left 30% of screen (held): rotate counter-clockwise.
+  - Right 30% of screen (held): rotate clockwise.
+  - Bottom-right ~25%×25% (tapped): Superzapper, edge-triggered on finger-down.
+  - Anywhere else (short tap, <25 px movement, <350 ms): fire, edge-triggered on finger-up.
+- **State-screen taps**: Tap anywhere on Landing / Game Over / High-score to advance.
+- **Mouse-event suppression**: ~500 ms after any finger event, mouse-button events are ignored to avoid mobile-browser double-fire.
+- **Visual overlay**: Hold-zone rectangles labelled `<<` / `>>` / `ZAP` / `TAP TO FIRE`.
+- **Conditional Compilation**: Touch UI only drawn in web build (`#ifdef __EMSCRIPTEN__`).
 - **Sound Control**: S key toggles sound in both native and web versions.
 
 ### 3. Build & Platform Support ✅
 - **Native**: Compiles with GCC on Linux (`-lSDL3 -lm`).
 - **WebAssembly**: Ready for Emscripten via `build.sh`.
 
-### 4. Touch Controls (Web Version) ⚠️
+### 4. Touch Controls (Web Version)
 
-**Status**: Touch controls are implemented but may require further refinement based on user testing.
+**Status**: Reworked from broken swipe model to multi-touch hold-zones. See `CONTROLS.md` for the audit that drove this change.
 
-#### Current Implementation
-- **Simplified Controls**: Left/right swipes for rotation, tap anywhere to fire
-- **Rotation Direction**: 
-  - Left swipe = Clockwise (matches left arrow key)
-  - Right swipe = Counter-clockwise (matches right arrow key)
-- **Firing**: Single shot per tap release with 200ms cooldown
-- **Rotation Speed**: 20% of original speed (much slower for precision)
-- **State Management**: Uses context struct variables for web compatibility
-
-#### Known Issues & Limitations
-- **Web Compatibility**: Initially used static variables which don't work in WebAssembly
-- **Fixed**: Moved all state to AppContext struct for proper persistence
-- **Testing Required**: Real-world mobile device testing needed
-- **Potential Improvements**: May need adjustment to swipe sensitivity and rotation speed
-
-#### Technical Implementation
-- **Swipe Detection**: Horizontal movement only (30px minimum)
-- **Tap Detection**: Any tap not detected as swipe triggers firing
-- **State Variables**: `rotationFrameCounter`, `wasTouching`, `fireTriggered`, `lastFireTime`
-- **Initialization**: Properly reset in `ResetGame()` function
-
----
-
-## 🛠 Technical Notes for Future Developers
-
-### Touch Controls Implementation
-
-**Important**: Static variables in `MainLoop()` don't work in WebAssembly builds! Always use context struct.
-
-#### Current Working Implementation
-- **Swipe Detection**: Left/right horizontal swipes only (simplified from circular)
-- **Rotation**: 1 segment every 5 frames (20% speed)
-- **Firing**: Edge-triggered on tap release with cooldown
-- **State**: All variables in `AppContext` struct for web compatibility
+#### Implementation
+- **Per-finger tracking**: `AppContext.fingers[8]` array keyed on `SDL_FingerID`. Each slot stores `id`, `active`, `zone`, `startX/Y`, `startTick`, `moved`.
+- **Zone classification** (`ClassifyTouchZone`): runs on `FINGER_DOWN`, frozen for the lifetime of that finger.
+  - `1` = left third (CCW), `2` = right third (CW), `3` = bottom-right corner (Superzapper), `0` = neutral/fire.
+- **Rotation**: each frame, scan active fingers; if any has zone 1, request CCW; if any has zone 2, request CW. Cadence is throttled to one segment every 3 frames via `ctx->rotationFrameCounter`.
+- **Fire**: edge-triggered on `FINGER_UP` if `!moved` and duration <350 ms and zone == 0. Sets `ctx->firePending`, drained per frame in `MainLoop`.
+- **Superzapper**: edge-triggered on `FINGER_DOWN` if zone == 3. Sets `ctx->superzapperPending`.
+- **Mouse suppression**: a `lastFingerTick` timestamp causes mouse-button-down events within 500 ms of a finger event to be ignored (mobile browsers synthesise mouse events from touches).
 
 #### Event Handling
-- `SDL_EVENT_FINGER_DOWN`: Start tracking touch position
-- `SDL_EVENT_FINGER_MOTION`: Detect swipe direction (left/right)
-- `SDL_EVENT_FINGER_UP`: Reset swipe state
-- **Swipe Logic**: 30px minimum horizontal movement to register
+- `SDL_EVENT_FINGER_DOWN`: allocate slot via `FindOrAllocFinger`, classify zone, fire Superzapper if applicable.
+- `SDL_EVENT_FINGER_MOTION`: mark `moved = true` once finger has travelled >25 px from start.
+- `SDL_EVENT_FINGER_UP`: queue fire if it qualified as a tap; release the slot.
 
 #### State Variables (in AppContext)
 ```c
-int rotationFrameCounter;  // For slow rotation
-bool wasTouching;         // Tap detection
-bool fireTriggered;       // Prevent multiple fires
-Uint64 lastFireTime;      // Cooldown timing
+struct {
+    SDL_FingerID id;
+    bool active;
+    int zone;
+    float startX, startY;
+    Uint64 startTick;
+    bool moved;
+} fingers[MAX_TOUCH_FINGERS];
+int rotationFrameCounter;
+bool firePending;
+bool superzapperPending;
 ```
 
-#### Initialization
-Must be reset in `ResetGame()`:
-```c
-ctx->rotationFrameCounter = 0;
-ctx->wasTouching = false;
-ctx->fireTriggered = false;
-ctx->lastFireTime = 0;
-```
+All touch state lives in `AppContext` (no `static` locals in `MainLoop`, which Emscripten/WASM does not handle predictably across `emscripten_set_main_loop` invocations). `ResetGame` clears all finger slots and pending flags.
 
 ### Coordinate System
 - **Z-Axis**: `z=0` is at the viewer. The tunnel rim where the player sits is currently around `z=2.0`. Higher `z` values are further "into" the screen.
@@ -202,3 +160,9 @@ For explosions when enemies are hit, implement a simple particle system:
 - [x] Reorganize controls: S key toggles sound, mouse click toggles touch controls.
 - [x] Make S key sound toggle case-insensitive.
 - [x] Ensure landing page only starts with Arrow Up key (not any key).
+- [x] Replace swipe-based touch controls with multi-touch hold-zone model.
+- [x] Custom Emscripten shell (`shell.html`) with viewport meta and `touch-action: none`.
+- [x] Fix `LoadHighScores` web bug: `EM_ASM_INT` truncated heap pointer; switch to `EM_ASM_PTR` + `stringToNewUTF8`.
+- [x] Reset score unconditionally in `ResetGame` and `ContinueGameWithSelectedGeometry`; `R` in GAMEOVER now calls `ResetGame`.
+- [x] Make window resizable (`SDL_WINDOW_RESIZABLE`); layout reads `SDL_GetWindowSize` per frame.
+- [x] Strip `DEBUG:` `printf`/`fprintf` spam; widen name-entry charset; replace static `nameInitialized` with `ctx->nameEntryInitialized`.
