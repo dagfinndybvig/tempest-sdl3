@@ -12,6 +12,34 @@ How to update each build of `tempest-sdl3` and when to ship a new release.
 
 All three builds compile from the **same `main.c`** with platform branches under `#ifdef __EMSCRIPTEN__` / `#ifdef _WIN32`. Don't fork the source.
 
+## Syncing with GitHub
+
+- **Sync regularly.** Commit and push small, working changes as you go. Don't let local work pile up — the dev container is ephemeral and uncommitted work is the easiest thing to lose.
+- **Pull before you start** a session, especially if you've been working from another machine or used the GitHub web UI:
+  ```bash
+  git pull --ff-only
+  ```
+- **Default workflow is direct commits to `main`.** This project is small and the maintainer is solo, so PR ceremony isn't required for routine fixes and tweaks.
+- **Use a feature branch when the change is risky.** Examples of "risky":
+  - Large refactors that may not compile or run correctly for several commits.
+  - Experimental features you might want to abandon.
+  - Save-format or control-scheme changes that could regress players' data or muscle memory.
+  - Anything you'd want to test for several sessions before publishing.
+
+  ```bash
+  git switch -c feature/<short-name>
+  # ... commit + push as usual ...
+  git push -u origin feature/<short-name>
+  # When you're happy, merge back:
+  git switch main
+  git merge --no-ff feature/<short-name>
+  git push
+  git branch -d feature/<short-name>
+  git push origin --delete feature/<short-name>
+  ```
+
+  GitHub Pages serves `docs/` from `main`, and the Release workflow only triggers on `v*` tags pushed to `main`, so feature-branch work doesn't reach end users until you merge.
+
 ## Standard change loop
 
 1. Edit `main.c` (or related source).
