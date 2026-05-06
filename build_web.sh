@@ -11,7 +11,9 @@ emcc main.c \
     --preload-file percussion.wav@/ \
     --preload-file coin.wav@/ \
     --preload-file shotburst.wav@/ \
-    -o docs/index.html -sUSE_SDL=3 -sALLOW_MEMORY_GROWTH=1 -lm
+    --shell-file shell.html \
+    -o docs/index.html -sUSE_SDL=3 -sALLOW_MEMORY_GROWTH=1 \
+    -sEXPORTED_RUNTIME_METHODS=stringToNewUTF8 -lm
 
 if [ $? -eq 0 ]; then
     echo "Web build successful: docs/index.html"

@@ -134,24 +134,39 @@ typedef struct {
     char newHighScoreName[20];
     int newHighScorePosition;
     int nameEntryCursorPos;
-    // Touch controls (web only)
-    bool touchLeftActive;
-    bool touchRightActive;
-    bool touchFireActive;
-    bool touchSuperzapperActive;
+    bool nameEntryInitialized; // Reset on each new game; replaces broken static.
+
+    // ---- Touch controls (web only) ----
+    // The screen is divided into four zones while playing:
+    //   left third       -> rotate counter-clockwise (decrement playerSegment)
+    //   right third      -> rotate clockwise        (increment playerSegment)
+    //   bottom-right ~25%x~25% -> superzapper (one-shot edge trigger)
+    //   anywhere else    -> tap = fire (edge trigger on FINGER_UP)
+    // Each finger is tracked independently so the player can rotate AND fire.
     bool showTouchControls;
-    bool highscoreEntryPending; // Track if we have a pending highscore entry
-    bool touchOnlyMode; // True if running on a touch-only device
-    
-    // Touch control state (moved from static variables for web compatibility)
-    int rotationFrameCounter; // For slow rotation
-    bool wasTouching; // For tap detection
-    bool fireTriggered; // Prevent multiple fires
-    Uint64 lastFireTime; // Cooldown timing
-    
-    // Circular swipe gesture tracking
-    float lastTouchX, lastTouchY; // For swipe detection
-    bool isSwiping; // Whether we're in a swipe gesture
+    bool highscoreEntryPending;
+
+    // Per-finger state. SDL3's SDL_FingerID is Sint64.
+    #define MAX_TOUCH_FINGERS 8
+    struct {
+        SDL_FingerID id;
+        bool active;
+        int zone;            // 0=none/fire, 1=rotate-left (CCW), 2=rotate-right (CW), 3=superzapper
+        float startX, startY;// in screen pixels
+        Uint64 startTick;
+        bool moved;          // crossed tap threshold
+    } fingers[MAX_TOUCH_FINGERS];
+
+    int rotationFrameCounter; // throttle rotation cadence
+
+    // Edge-triggered actions queued from the event loop, drained per frame.
+    bool firePending;
+    bool superzapperPending;
+
+    // Mouse fallback: tracks left-button drag for desktop browsers without touch.
+    bool mouseDown;
+    Uint64 mouseDownTick;
+    int mouseDownX, mouseDownY;
 } AppContext;
 
 typedef struct {
@@ -527,14 +542,8 @@ static void TriggerGameOverShape(AppContext* ctx) {
     ctx->gameOverShape = randomShape;
     ctx->selectedTunnelShape = randomShape;
     ApplyTunnelShape(ctx, randomShape);
-    fprintf(stderr, "DEBUG: GameOver triggered, gameOverShape=%d, selectedTunnelShape=%d, tunnelShape=%d\n", ctx->gameOverShape, ctx->selectedTunnelShape, ctx->tunnelShape);
     PlayWav(&ctx->audio, WAV_EXPLOSION, false);
-    
-    // Check if this score qualifies for high scores
-    printf("DEBUG: About to check highscore for score: %d\n", ctx->score);
     AddHighScore(ctx, ctx->score);
-    printf("DEBUG: After AddHighScore, state = %d (LANDING=%d, PLAYING=%d, GAMEOVER=%d, HIGHSCORE=%d)\n", 
-           ctx->state, STATE_LANDING, STATE_PLAYING, STATE_GAMEOVER, STATE_HIGHSCORE_DISPLAY);
 }
 
 void AudioCallback(void* userdata, SDL_AudioStream* stream, int len, int total_amount) {
@@ -722,10 +731,9 @@ void DrawBlaster(AppContext* ctx, int w, int h) {
 }
 
 void ResetGame(AppContext* ctx) {
-    // Only reset score if we don't have a pending highscore entry
-    if (!ctx->highscoreEntryPending) {
-        ctx->score = 0;
-    }
+    // Always reset score for a fresh game. The previous "highscoreEntryPending"
+    // gate caused the prior score to leak onto the HUD of the next game.
+    ctx->score = 0;
     ctx->lives = 3;
     ctx->gameOver = false;
     ctx->superzapperUsed = false;
@@ -738,34 +746,33 @@ void ResetGame(AppContext* ctx) {
     ctx->showHighScores = false;
     ctx->nameEntryCursorPos = 0;
     ctx->newHighScorePosition = -1; // Not in name entry mode
+    ctx->nameEntryInitialized = false;
     ApplyTunnelShape(ctx, ctx->selectedTunnelShape);
     for(int i=0; i<MAX_SHOTS; i++) ctx->shots[i].active = false;
     for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
     for(int i=0; i<MAX_BURST_SHOTS; i++) ctx->burstShots[i].active = false;
-    
-    // Initialize touch control state
+
+    // Reset touch state for a fresh game.
     ctx->rotationFrameCounter = 0;
-    ctx->wasTouching = false;
-    ctx->fireTriggered = false;
-    ctx->lastFireTime = 0;
-    
+    for (int i = 0; i < MAX_TOUCH_FINGERS; i++) ctx->fingers[i].active = false;
+    ctx->firePending = false;
+    ctx->superzapperPending = false;
+    ctx->mouseDown = false;
+
     // Clear the pending flag when starting a new game (not continuing with highscore)
     ctx->highscoreEntryPending = false;
 }
 
 static void ContinueGameWithSelectedGeometry(AppContext* ctx) {
     ctx->lives = 3;
-    // Only reset score if we don't have a pending highscore entry
-    if (!ctx->highscoreEntryPending) {
-        ctx->score = 0;
-    }
+    // Always reset score for a continued game (geometry change after game over).
+    ctx->score = 0;
     ctx->gameOver = false;
     ctx->superzapperUsed = false;
     ctx->flashTimer = 0;
     ctx->playerSegment = 0;
     ctx->enemiesDestroyedCount = 0;
     ctx->gameSpeedMultiplier = 1.0f;
-    fprintf(stderr, "DEBUG: ContinueGameWithSelectedGeometry using gameOverShape=%d\n", ctx->gameOverShape);
     ctx->selectedTunnelShape = ctx->gameOverShape;
     ApplyTunnelShape(ctx, ctx->gameOverShape);
     for(int i=0; i<MAX_SHOTS; i++) ctx->shots[i].active = false;
@@ -774,11 +781,16 @@ static void ContinueGameWithSelectedGeometry(AppContext* ctx) {
 
 static void LoadHighScores(AppContext* ctx) {
 #ifdef __EMSCRIPTEN__
-    // Web version - use localStorage
-    char* json = (char*)EM_ASM_INT({
-        return localStorage.getItem('tempestHighScores') || '';
+    // Web version - use localStorage. EM_ASM_PTR returns a heap pointer to a
+    // UTF-8 string that we own and must free(). The previous code used
+    // EM_ASM_INT, which truncated the JS pointer to int and produced a NULL
+    // pointer on every call -- saved scores never came back.
+    char* json = (char*)EM_ASM_PTR({
+        var s = localStorage.getItem('tempestHighScores');
+        if (!s || s.length === 0) return 0;
+        return stringToNewUTF8(s);
     });
-    
+
     if (json && strlen(json) > 0) {
         // Simple JSON parser for our specific format
         char* ptr = json;
@@ -871,20 +883,15 @@ static void SaveHighScores(AppContext* ctx) {
 }
 
 static void AddHighScore(AppContext* ctx, int score) {
-    printf("DEBUG: AddHighScore called with score: %d\n", score);
-    
     // Check if we have a pending highscore entry from before
     if (ctx->highscoreEntryPending) {
-        printf("DEBUG: Resuming pending highscore entry\n");
         ctx->state = STATE_HIGHSCORE_DISPLAY;
         return;
     }
-    
+
     // Check if score qualifies for high score table
     for (int i = 0; i < MAX_HIGHSCORES; i++) {
-        printf("DEBUG: Comparing with highscore %d: %d\n", i, ctx->highScores[i].score);
         if (score > ctx->highScores[i].score) {
-            printf("DEBUG: New highscore! Position %d\n", i);
             // Shift lower scores down
             for (int j = MAX_HIGHSCORES - 1; j > i; j--) {
                 ctx->highScores[j] = ctx->highScores[j - 1];
@@ -905,7 +912,6 @@ static void AddHighScore(AppContext* ctx, int score) {
             return;
         }
     }
-    printf("DEBUG: No highscore achieved\n");
     // If no high score, go directly to game over
     ctx->highscoreEntryPending = false;
     ctx->state = STATE_GAMEOVER;
@@ -982,46 +988,34 @@ void DrawHUD(AppContext* ctx, int w, int h) {
     // Draw touch controls for web version
 #ifdef __EMSCRIPTEN__
     if (ctx->showTouchControls) {
-        // Draw circular swipe area indicator
-        SDL_SetRenderDrawColor(ctx->renderer, 0, 100, 200, 80);
-        float centerX = w * 0.5f;
-        float centerY = h * 0.5f;
-        float radius = fmin(w, h) * 0.4f;
-        
-        // Draw outer circle
-        for (float angle = 0; angle < 2 * M_PI; angle += 0.1f) {
-            float x1 = centerX + radius * cosf(angle);
-            float y1 = centerY + radius * sinf(angle);
-            float x2 = centerX + radius * cosf(angle + 0.1f);
-            float y2 = centerY + radius * sinf(angle + 0.1f);
-            SDL_RenderLine(ctx->renderer, x1, y1, x2, y2);
-        }
-        
-        // Draw inner circle (fire zone)
-        SDL_SetRenderDrawColor(ctx->renderer, 200, 0, 0, 120);
-        float innerRadius = radius * 0.3f;
-        for (float angle = 0; angle < 2 * M_PI; angle += 0.1f) {
-            float x1 = centerX + innerRadius * cosf(angle);
-            float y1 = centerY + innerRadius * sinf(angle);
-            float x2 = centerX + innerRadius * cosf(angle + 0.1f);
-            float y2 = centerY + innerRadius * sinf(angle + 0.1f);
-            SDL_RenderLine(ctx->renderer, x1, y1, x2, y2);
-        }
-        
-        // Superzapper button (keep in corner for easy access)
-        SDL_SetRenderDrawColor(ctx->renderer, 0, 200, 0, 150);
-        SDL_FRect superZone = {w * 0.7f, h * 0.8f, w * 0.3f, h * 0.2f};
-        SDL_RenderFillRect(ctx->renderer, &superZone);
-        
-        // Draw labels
-        SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 255);
-        SDL_RenderDebugText(ctx->renderer, centerX - 50.0f, centerY - 10.0f, "SWIPE TO ROTATE");
-        SDL_RenderDebugText(ctx->renderer, centerX - 30.0f, centerY + 10.0f, "TAP TO FIRE");
-        SDL_RenderDebugText(ctx->renderer, w * 0.85f - 20.0f, h * 0.85f, "ZAP");
-        
-        // Draw swipe direction arrows
-        SDL_RenderDebugText(ctx->renderer, centerX - radius - 40.0f, centerY - 20.0f, "CCW");
-        SDL_RenderDebugText(ctx->renderer, centerX + radius + 10.0f, centerY - 20.0f, "CW");
+        // Hold-zones: left third = CCW, right third = CW.
+        // Bottom-right ~25%x~25% = Superzapper (one-shot).
+        // Tap anywhere else = fire.
+        SDL_SetRenderDrawBlendMode(ctx->renderer, SDL_BLENDMODE_BLEND);
+
+        const float zoneAlpha = 40.0f; // very faint
+        SDL_FRect leftZone  = { 0.0f,           0.0f, w * 0.30f,  (float)h };
+        SDL_FRect rightZone = { w * 0.70f,      0.0f, w * 0.30f,  (float)h };
+        SDL_FRect zapZone   = { w * 0.75f, h * 0.75f, w * 0.25f, h * 0.25f };
+
+        SDL_SetRenderDrawColor(ctx->renderer, 0, 120, 200, (Uint8)zoneAlpha);
+        SDL_RenderFillRect(ctx->renderer, &leftZone);
+        SDL_RenderFillRect(ctx->renderer, &rightZone);
+
+        SDL_SetRenderDrawColor(ctx->renderer, 0, 200, 100, (Uint8)(zoneAlpha + 30));
+        SDL_RenderFillRect(ctx->renderer, &zapZone);
+
+        SDL_SetRenderDrawColor(ctx->renderer, 200, 200, 200, 180);
+        SDL_RenderRect(ctx->renderer, &leftZone);
+        SDL_RenderRect(ctx->renderer, &rightZone);
+        SDL_RenderRect(ctx->renderer, &zapZone);
+
+        // Labels (use SDL_RenderDebugText for the small built-in font).
+        SDL_SetRenderDrawColor(ctx->renderer, 255, 255, 255, 220);
+        SDL_RenderDebugText(ctx->renderer, w * 0.10f, h * 0.50f, "<<");
+        SDL_RenderDebugText(ctx->renderer, w * 0.85f, h * 0.50f, ">>");
+        SDL_RenderDebugText(ctx->renderer, w * 0.83f, h * 0.85f, "ZAP");
+        SDL_RenderDebugText(ctx->renderer, w * 0.45f, h * 0.05f, "TAP TO FIRE");
     }
 #endif
 }
@@ -1065,7 +1059,6 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
         // Format score with fixed width (6 digits) and name
         if (i == ctx->newHighScorePosition) {
             isEditing = true;
-            printf("Displaying new highscore name: '%s'\n", ctx->newHighScoreName);
             sprintf(scoreText, "%6d %s", ctx->score, ctx->newHighScoreName);
         } else {
             sprintf(scoreText, "%6d %s", ctx->highScores[i].score, ctx->highScores[i].name);
@@ -1126,22 +1119,15 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
         float confirmTextY = confirmBtn.y + (confirmBtn.h - 8) * 0.5f;
         SDL_RenderDebugText(ctx->renderer, confirmTextX, confirmTextY, confirmText);
 #else
-        // Touch mode: Automatically use "PLAYER" with touch confirmation
-        // Set name based on input mode (only if not already set)
-        static bool nameInitialized = false;
-        if (!nameInitialized && (ctx->newHighScoreName[0] == '\0' || ctx->newHighScoreName[0] == ' ')) {
-            nameInitialized = true; // Prevent re-initialization
-            if (ctx->touchOnlyMode) {
-                // Touch-only devices: auto-set and lock to "PLAYER"
-                strcpy(ctx->newHighScoreName, "PLAYER");
-                ctx->nameEntryCursorPos = 6;
-            } else {
-                // Browser/keyboard mode: start with "PLAYER" but allow editing
-                strcpy(ctx->newHighScoreName, "PLAYER");
-                ctx->nameEntryCursorPos = 6;
-            }
+        // Touch mode: prefill "PLAYER" once per high-score entry. The flag
+        // lives on AppContext so it resets on every new game; the previous
+        // function-static survived game resets and broke the second entry.
+        if (!ctx->nameEntryInitialized && (ctx->newHighScoreName[0] == '\0' || ctx->newHighScoreName[0] == ' ')) {
+            ctx->nameEntryInitialized = true;
+            strcpy(ctx->newHighScoreName, "PLAYER");
+            ctx->nameEntryCursorPos = 6;
         }
-        
+
         // Draw single confirmation button for touch
         SDL_SetRenderDrawColor(ctx->renderer, 150, 200, 150, 220);
         SDL_FRect confirmBtn = {w * 0.4f, h * 0.65f, w * 0.2f, h * 0.1f};
@@ -1159,6 +1145,61 @@ static void DrawHighScoreDisplayScreen(AppContext* ctx, int w, int h) {
     
     // Restore original scale
     SDL_SetRenderScale(ctx->renderer, oldScaleX, oldScaleY);
+}
+
+// ---------------------------------------------------------------------------
+// Input helpers
+// ---------------------------------------------------------------------------
+
+static void FireShot(AppContext* ctx) {
+    if (ctx->state != STATE_PLAYING) return;
+    for (int i = 0; i < MAX_SHOTS; i++) {
+        if (!ctx->shots[i].active) {
+            ctx->shots[i].active = true;
+            ctx->shots[i].z = 2.0f;
+            ctx->shots[i].segment = ctx->playerSegment;
+            PlayWav(&ctx->audio, WAV_LASERZAP, false);
+            break;
+        }
+    }
+}
+
+static void UseSuperzapper(AppContext* ctx) {
+    if (ctx->state != STATE_PLAYING || ctx->superzapperUsed) return;
+    ctx->superzapperUsed = true;
+    ctx->flashTimer = 10;
+    for (int i = 0; i < MAX_ENEMIES; i++) ctx->enemies[i].active = false;
+    PlayWav(&ctx->audio, WAV_EXPLOSION, false);
+}
+
+// Touch zone classification.
+// Returns:
+//   1 = rotate counter-clockwise (left third)
+//   2 = rotate clockwise (right third)
+//   3 = superzapper (bottom-right corner ~25%x25%)
+//   0 = fire / neutral (anywhere else)
+static int ClassifyTouchZone(float x, float y, int w, int h) {
+    if (x >= w * 0.75f && y >= h * 0.75f) return 3;
+    if (x < w * 0.30f) return 1;
+    if (x > w * 0.70f) return 2;
+    return 0;
+}
+
+static int FindOrAllocFinger(AppContext* ctx, SDL_FingerID id) {
+    for (int i = 0; i < MAX_TOUCH_FINGERS; i++) {
+        if (ctx->fingers[i].active && ctx->fingers[i].id == id) return i;
+    }
+    for (int i = 0; i < MAX_TOUCH_FINGERS; i++) {
+        if (!ctx->fingers[i].active) return i;
+    }
+    return -1;
+}
+
+static int FindFinger(AppContext* ctx, SDL_FingerID id) {
+    for (int i = 0; i < MAX_TOUCH_FINGERS; i++) {
+        if (ctx->fingers[i].active && ctx->fingers[i].id == id) return i;
+    }
+    return -1;
 }
 
 void MainLoop(void* arg) {
@@ -1184,142 +1225,107 @@ void MainLoop(void* arg) {
             emscripten_cancel_main_loop();
 #endif
         }
-        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-            // On landing page, tap activates touch controls AND starts game
+
+        // Track most recent finger event so we can suppress synthesised
+        // mouse events on mobile browsers (Emscripten generates both).
+        static Uint64 lastFingerTick = 0;
+
+        // ---- Tap-to-start / tap-to-restart on landing & game-over screens ----
+        // Accept both finger taps (mobile/web) and mouse clicks (desktop).
+        bool tapToProgress = false;
+        float tapX = 0.0f, tapY = 0.0f;
+        if (event.type == SDL_EVENT_FINGER_DOWN) {
+            tapToProgress = true;
+            tapX = event.tfinger.x * w;
+            tapY = event.tfinger.y * h;
+            lastFingerTick = SDL_GetTicks();
+        } else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+            // Suppress mouse events that are synthesised from a touch within ~500ms.
+            if (SDL_GetTicks() - lastFingerTick < 500) {
+                // skip
+            } else {
+                tapToProgress = true;
+                tapX = (float)event.button.x;
+                tapY = (float)event.button.y;
+            }
+        }
+
+        if (tapToProgress) {
             if (ctx->state == STATE_LANDING) {
 #ifdef __EMSCRIPTEN__
                 ctx->showTouchControls = true;
 #endif
                 ctx->state = STATE_PLAYING;
                 ResetGame(ctx);
-            }
-            // On game over, tap restarts with touch controls
-            else if (ctx->state == STATE_GAMEOVER) {
+            } else if (ctx->state == STATE_GAMEOVER) {
 #ifdef __EMSCRIPTEN__
                 ctx->showTouchControls = true;
 #endif
                 ContinueGameWithSelectedGeometry(ctx);
                 ctx->state = STATE_PLAYING;
-            }
-            // On highscore screen, tap returns to game over (then player can restart)
-            else if (ctx->state == STATE_HIGHSCORE_DISPLAY) {
+            } else if (ctx->state == STATE_HIGHSCORE_DISPLAY) {
                 bool isEditing = ctx->newHighScorePosition >= 0 && ctx->newHighScorePosition < MAX_HIGHSCORES;
                 if (isEditing) {
-                    // Auto-finalize the highscore entry for touch devices
                     FinalizeHighScoreEntry(ctx);
-                    ctx->newHighScorePosition = -1; // Clear editing mode
+                    ctx->newHighScorePosition = -1;
                 }
-                // Don't clear highscoreEntryPending here - it should persist until actual game restart
                 ctx->state = STATE_GAMEOVER;
             }
-            else {
-                // During gameplay, toggle touch controls (web only)
-#ifdef __EMSCRIPTEN__
-                ctx->showTouchControls = !ctx->showTouchControls;
-#endif
-            }
+            // No state change during gameplay -- gameplay touches are
+            // handled per-finger below. (The previous build toggled the
+            // touch overlay here; that made misplaced taps disable the
+            // only input layer with no recovery, so it is removed.)
         }
 
-        // Touch controls for web version
-#ifdef __EMSCRIPTEN__
-        if (event.type == SDL_EVENT_FINGER_DOWN || event.type == SDL_EVENT_FINGER_MOTION) {
-            // Get touch position normalized to [0,1]
-            float touchX = event.tfinger.x;
-            float touchY = event.tfinger.y;
-            
-            // Convert to screen coordinates
-            int w, h;
-            SDL_GetWindowSize(ctx->window, &w, &h);
-            int screenX = (int)(touchX * w);
-            int screenY = (int)(touchY * h);
-            
-            // Handle simple name selection in highscore name entry mode
-            if (ctx->state == STATE_HIGHSCORE_DISPLAY) {
-                bool isEditing = ctx->newHighScorePosition >= 0 && ctx->newHighScorePosition < MAX_HIGHSCORES;
-                if (isEditing) {
-                    // Automatically set name to "PLAYER" for mobile
-#ifdef __EMSCRIPTEN__
-                    if (ctx->newHighScoreName[0] == '\0' || ctx->newHighScoreName[0] == ' ') {
-                        strcpy(ctx->newHighScoreName, "PLAYER");
-                        ctx->nameEntryCursorPos = 6;
+        // ---- Per-finger input during gameplay (web/mobile) ----
+        if (event.type == SDL_EVENT_FINGER_DOWN ||
+            event.type == SDL_EVENT_FINGER_MOTION ||
+            event.type == SDL_EVENT_FINGER_UP) {
+            float fx = event.tfinger.x * w;
+            float fy = event.tfinger.y * h;
+            SDL_FingerID id = event.tfinger.fingerID;
+
+            if (event.type == SDL_EVENT_FINGER_DOWN) {
+                int slot = FindOrAllocFinger(ctx, id);
+                if (slot >= 0) {
+                    ctx->fingers[slot].id = id;
+                    ctx->fingers[slot].active = true;
+                    ctx->fingers[slot].zone = ClassifyTouchZone(fx, fy, w, h);
+                    ctx->fingers[slot].startX = fx;
+                    ctx->fingers[slot].startY = fy;
+                    ctx->fingers[slot].startTick = SDL_GetTicks();
+                    ctx->fingers[slot].moved = false;
+                    // Superzapper is edge-triggered on touch-down (feels snappier).
+                    if (ctx->fingers[slot].zone == 3) {
+                        ctx->superzapperPending = true;
                     }
-#endif
-                    
-                    // Check if touch is on confirmation button (touch mode only)
-#ifdef __EMSCRIPTEN__
-                    if (screenY > h * 0.65 && screenY < h * 0.75 && screenX > w * 0.4 && screenX < w * 0.6) {
-                        // Continue to game over screen
-                        ctx->state = STATE_GAMEOVER;
+                }
+            } else if (event.type == SDL_EVENT_FINGER_MOTION) {
+                int slot = FindFinger(ctx, id);
+                if (slot >= 0) {
+                    float dx = fx - ctx->fingers[slot].startX;
+                    float dy = fy - ctx->fingers[slot].startY;
+                    if (dx * dx + dy * dy > 25.0f * 25.0f) {
+                        ctx->fingers[slot].moved = true;
                     }
-#endif
+                }
+            } else { // FINGER_UP
+                int slot = FindFinger(ctx, id);
+                if (slot >= 0) {
+                    Uint64 dur = SDL_GetTicks() - ctx->fingers[slot].startTick;
+                    bool isTap = !ctx->fingers[slot].moved && dur < 350;
+                    int zone = ctx->fingers[slot].zone;
+                    if (isTap && zone == 0 && ctx->state == STATE_PLAYING) {
+                        ctx->firePending = true;
+                    }
+                    ctx->fingers[slot].active = false;
                 }
             }
-            
-            // Circular swipe gesture detection for gameplay
-            if (ctx->state == STATE_PLAYING) {
-                // Convert touch position to center-relative coordinates
-                float centerX = w * 0.5f;
-                float centerY = h * 0.5f;
-                float relX = screenX - centerX;
-                float relY = screenY - centerY;
-                
-                if (event.type == SDL_EVENT_FINGER_DOWN) {
-                    // Start of potential swipe gesture
-                    ctx->lastTouchX = relX;
-                    ctx->lastTouchY = relY;
-                    ctx->isSwiping = false;
-                    
-                    // Reset rotation controls
-                    ctx->touchLeftActive = false;
-                    ctx->touchRightActive = false;
-                } 
-                else if (event.type == SDL_EVENT_FINGER_MOTION && !ctx->isSwiping) {
-                    // Simplified swipe detection: left/right only
-                    float currentX = relX;
-                    float minSwipeDistance = 30.0f; // Minimum horizontal distance for swipe
-                    
-                    // Calculate horizontal movement
-                    float deltaX = currentX - ctx->lastTouchX;
-                    
-                    if (fabs(deltaX) > minSwipeDistance) {
-                        // Left swipe (negative X direction) = clockwise
-                        if (deltaX < -minSwipeDistance) {
-                            ctx->touchLeftActive = false;
-                            ctx->touchRightActive = true;  // Right active = clockwise
-                        }
-                        // Right swipe (positive X direction) = counter-clockwise
-                        else if (deltaX > minSwipeDistance) {
-                            ctx->touchLeftActive = true;   // Left active = counter-clockwise
-                            ctx->touchRightActive = false;
-                        }
-                        ctx->isSwiping = true;
-                    }
-                    
-                    // Update last position
-                    ctx->lastTouchX = currentX;
-                    ctx->lastTouchY = relY;
-                }
-            }
+            lastFingerTick = SDL_GetTicks();
         }
-        if (event.type == SDL_EVENT_FINGER_DOWN) {
-            // Start tracking touch position
-            int w, h;
-            SDL_GetWindowSize(ctx->window, &w, &h);
-            ctx->lastTouchX = (int)(event.tfinger.x * w);
-            ctx->lastTouchY = (int)(event.tfinger.y * h);
-            ctx->isSwiping = false;
-        }
-        if (event.type == SDL_EVENT_FINGER_UP) {
-            ctx->touchLeftActive = false;
-            ctx->touchRightActive = false;
-            ctx->touchFireActive = false;
-            ctx->touchSuperzapperActive = false;
-            ctx->isSwiping = false;
-        }
-#endif
 
         if (event.type == SDL_EVENT_KEY_DOWN) {
-            
+
             if (ctx->state == STATE_LANDING) {
                 // Only Arrow Up starts the game with keyboard controls
                 if (event.key.scancode == SDL_SCANCODE_UP) {
@@ -1339,21 +1345,20 @@ void MainLoop(void* arg) {
                     ctx->state = STATE_PLAYING;
                     continue;
                 }
-                
+
                 // Only Arrow Up restarts with current random geometry
                 if (event.key.scancode == SDL_SCANCODE_UP) {
                     ContinueGameWithSelectedGeometry(ctx);
                     ctx->state = STATE_PLAYING;
                     continue;
                 }
-                
-                // R key restarts the game
+
+                // R key restarts the game from a clean slate.
                 if (event.key.scancode == SDL_SCANCODE_R) {
-                    // Check if we have a pending highscore entry that needs to be handled
                     if (ctx->highscoreEntryPending) {
-                        printf("DEBUG: R pressed but have pending highscore, showing highscore screen\n");
                         ctx->state = STATE_HIGHSCORE_DISPLAY;
                     } else {
+                        ResetGame(ctx);
                         ctx->state = STATE_PLAYING;
                     }
                     continue;
@@ -1377,28 +1382,17 @@ void MainLoop(void* arg) {
                 }
             }
             if (event.key.scancode == SDL_SCANCODE_SPACE) {
-                for(int i=0; i<MAX_SHOTS; i++) {
-                    if(!ctx->shots[i].active) {
-                        ctx->shots[i].active = true;
-                        ctx->shots[i].z = 2.0f;
-                        ctx->shots[i].segment = ctx->playerSegment;
-                        PlayWav(&ctx->audio, WAV_LASERZAP, false);
-                        break;
-                    }
-                }
+                FireShot(ctx);
             }
-            if (event.key.scancode == SDL_SCANCODE_Z && !ctx->superzapperUsed) {
-                ctx->superzapperUsed = true;
-                ctx->flashTimer = 10;
-                for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
-                PlayWav(&ctx->audio, WAV_EXPLOSION, false);
+            if (event.key.scancode == SDL_SCANCODE_Z) {
+                UseSuperzapper(ctx);
             }
-            
+
             // Handle high score display with integrated name entry
             if (ctx->state == STATE_HIGHSCORE_DISPLAY) {
                 // Check if we're in name entry mode
                 bool isEditing = ctx->newHighScorePosition >= 0 && ctx->newHighScorePosition < MAX_HIGHSCORES;
-                
+
                 if (isEditing) {
                     if (event.key.scancode == SDL_SCANCODE_RETURN) {
                         // Finalize name entry
@@ -1410,12 +1404,18 @@ void MainLoop(void* arg) {
                             ctx->nameEntryCursorPos--;
                             ctx->newHighScoreName[ctx->nameEntryCursorPos] = ' ';
                         }
-                    } else if (event.key.key >= 'a' && event.key.key <= 'z' && !event.key.repeat) {
-                        // Letter keys (ignore repeats to prevent multiple registrations)
-                        if (ctx->nameEntryCursorPos < 19) {
-                            ctx->newHighScoreName[ctx->nameEntryCursorPos] = (char)toupper(event.key.key);
+                    } else if (!event.key.repeat) {
+                        // Accept letters, digits, space, hyphen.
+                        SDL_Keycode k = event.key.key;
+                        char ch = 0;
+                        if (k >= 'a' && k <= 'z') ch = (char)toupper((unsigned char)k);
+                        else if (k >= 'A' && k <= 'Z') ch = (char)k;
+                        else if (k >= '0' && k <= '9') ch = (char)k;
+                        else if (k == SDLK_SPACE) ch = ' ';
+                        else if (k == SDLK_MINUS) ch = '-';
+                        if (ch && ctx->nameEntryCursorPos < 19) {
+                            ctx->newHighScoreName[ctx->nameEntryCursorPos] = ch;
                             ctx->nameEntryCursorPos++;
-                            // Ensure null termination
                             ctx->newHighScoreName[ctx->nameEntryCursorPos] = '\0';
                         }
                     }
@@ -1426,7 +1426,7 @@ void MainLoop(void* arg) {
                     }
                 }
             }
-            
+
             // Handle high score screen dismissal
             if (ctx->showHighScores && event.key.scancode == SDL_SCANCODE_R) {
                 ctx->showHighScores = false;
@@ -1436,76 +1436,33 @@ void MainLoop(void* arg) {
         }
     }
 
-    // Touch controls logic (web only)
-#ifdef __EMSCRIPTEN__
-    // Frame counter for very slow rotation (20% speed = every 5th frame)
+    // ---- Per-frame touch driving ----
+    // Rotation: any active finger in the left zone rotates CCW; right zone CW.
+    // If both are held, they cancel. Cadence ~50ms/segment.
+    bool ccw = false, cw = false;
+    for (int i = 0; i < MAX_TOUCH_FINGERS; i++) {
+        if (!ctx->fingers[i].active) continue;
+        if (ctx->fingers[i].zone == 1) ccw = true;
+        else if (ctx->fingers[i].zone == 2) cw = true;
+    }
     ctx->rotationFrameCounter++;
-    
-    // Much slower rotation - 20% of original speed
-    if (ctx->rotationFrameCounter % 5 == 0) { // Only rotate every 5th frame
-        if (ctx->touchLeftActive) {
+    if ((ctx->rotationFrameCounter % 3) == 0 && ctx->state == STATE_PLAYING) {
+        if (ccw && !cw) {
+            ctx->playerSegment = (ctx->playerSegment - 1 + NUM_SIDES) % NUM_SIDES;
+        } else if (cw && !ccw) {
             ctx->playerSegment = (ctx->playerSegment + 1) % NUM_SIDES;
         }
-        if (ctx->touchRightActive) {
-            ctx->playerSegment = (ctx->playerSegment - 1 + NUM_SIDES) % NUM_SIDES;
-        }
     }
-    
-    // Tap-to-fire anywhere: detect tap releases (fixed to fire only once)
-    if (!ctx->touchLeftActive && !ctx->touchRightActive && !ctx->isSwiping) {
-        // Not swiping, so this could be a tap
-        if (!ctx->wasTouching) {
-            // Touch just started - could be a tap
-            ctx->wasTouching = true;
-            ctx->fireTriggered = false; // Reset for new tap
-        } else {
-            // Touch ended - this was a tap, fire! (but only if not already triggered)
-            ctx->wasTouching = false;
-            
-            if (!ctx->fireTriggered) {
-                ctx->fireTriggered = true; // Mark as triggered to prevent multiple fires
-                
-                // Fire when tap is released
-                bool shouldFire = false;
-                if (ctx->state == STATE_PLAYING) {
-                    Uint64 currentTime = SDL_GetTicks();
-                    if (currentTime - ctx->lastFireTime > 200) { // 200ms cooldown
-                        shouldFire = true;
-                        ctx->lastFireTime = currentTime;
-                    }
-                }
-                
-                if (shouldFire) {
-                    for(int i=0; i<MAX_SHOTS; i++) {
-                        if(!ctx->shots[i].active) {
-                            ctx->shots[i].active = true;
-                            ctx->shots[i].z = 2.0f;
-                            ctx->shots[i].segment = ctx->playerSegment;
-                            PlayWav(&ctx->audio, WAV_LASERZAP, false);
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    } else {
-        ctx->wasTouching = false; // Reset if swiping
-        ctx->fireTriggered = false;
+
+    // Drain edge-triggered actions queued from event handlers.
+    if (ctx->firePending) {
+        FireShot(ctx);
+        ctx->firePending = false;
     }
-    
-    // Fire control is now handled in the touch controls section above
-    // (tap anywhere to fire)
-    
-    // Superzapper control
-    static bool wasTouchSuperzapperActive = false;
-    if (ctx->touchSuperzapperActive && !wasTouchSuperzapperActive && !ctx->superzapperUsed && ctx->state == STATE_PLAYING) {
-        ctx->superzapperUsed = true;
-        ctx->flashTimer = 10;
-        for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
-        PlayWav(&ctx->audio, WAV_EXPLOSION, false);
+    if (ctx->superzapperPending) {
+        UseSuperzapper(ctx);
+        ctx->superzapperPending = false;
     }
-    wasTouchSuperzapperActive = ctx->touchSuperzapperActive;
-#endif
 
     if (ctx->state == STATE_PLAYING) {
         if (ctx->flashTimer > 0) ctx->flashTimer--;
@@ -1839,15 +1796,12 @@ int main(int argc, char* argv[]) {
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) return 1;
     AppContext ctx = {0};
     ctx.selectedTunnelShape = TUNNEL_CIRCLE;
-    ctx.window = SDL_CreateWindow("Tempest SDL3", 800, 800, 0);
+    ctx.window = SDL_CreateWindow("Tempest SDL3", 800, 800, SDL_WINDOW_RESIZABLE);
     ctx.renderer = SDL_CreateRenderer(ctx.window, NULL);
-    
+
     // Initialize touch controls for web version
 #ifdef __EMSCRIPTEN__
     ctx.showTouchControls = true;
-    // For now, assume web version might have keyboard, so don't force touch-only mode
-    // In future, could detect actual touch capability
-    ctx.touchOnlyMode = false;
 #endif
     
     // Load high scores
