@@ -3,3 +3,5 @@ highscores.txt
 *.pid
 *.log
 build/
+dist/
+third_party/
