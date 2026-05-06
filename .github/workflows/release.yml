@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag name for a manual release (e.g. v0.1.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Build Windows x86_64 (cross-compiled)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run cross-compile script
+        run: ./build_windows.sh
+
+      - name: Stage release directory
+        run: |
+          TAG="${GITHUB_REF_NAME:-${{ github.event.inputs.tag }}}"
+          STAGE="tempest-${TAG}-windows-x64"
+          mkdir -p "release/${STAGE}"
+          cp dist/windows/tempest.exe "release/${STAGE}/"
+          cp dist/windows/SDL3.dll    "release/${STAGE}/"
+          cp dist/windows/*.wav       "release/${STAGE}/"
+          cp README.md                "release/${STAGE}/" 2>/dev/null || true
+          cd release && zip -r "${STAGE}.zip" "${STAGE}"
+          ls -lh "${STAGE}.zip"
+          echo "STAGE=${STAGE}" >> "$GITHUB_ENV"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.STAGE }}
+          path: release/${{ env.STAGE }}.zip
+
+      - name: Create / update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: ${{ github.event.inputs.tag || github.ref_name }}
+          generate_release_notes: true
+          files: release/${{ env.STAGE }}.zip

@@ -36,6 +36,14 @@ Cross-compile a redistributable Windows x86_64 build using MinGW-w64:
 ```
 The script bootstraps its own dependencies on first run (apt-installs `gcc-mingw-w64-x86-64` and downloads the prebuilt SDL3 MinGW dev package into `third_party/`). Zip up `dist/windows/` for distribution. Targets Windows x86_64; runs on Windows 10 and later. `SDL3.dll` must stay alongside `tempest.exe`.
 
+#### Automated GitHub Releases
+Pushing a `v*` tag triggers `.github/workflows/release.yml`, which cross-compiles the Windows build and attaches `tempest-<tag>-windows-x64.zip` to a GitHub Release. To cut a release:
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+A release can also be triggered manually from the **Actions** tab via the *Release* workflow's *Run workflow* button.
+
 ### Web Version (Local Testing)
 ```bash
 ./build_web.sh
