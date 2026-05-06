@@ -31,18 +31,10 @@ An experimental 3D vector-style engine built with C and SDL3, compiled to WebAss
 ### Windows Version (cross-compiled from Linux)
 Cross-compile a redistributable Windows x86_64 build using MinGW-w64:
 ```bash
-# One-time setup
-sudo apt-get install -y gcc-mingw-w64-x86-64
-mkdir -p third_party && cd third_party
-curl -LO https://github.com/libsdl-org/SDL/releases/download/release-3.4.8/SDL3-devel-3.4.8-mingw.tar.gz
-tar xzf SDL3-devel-3.4.8-mingw.tar.gz
-cd ..
-
-# Build
 ./build_windows.sh
 # Output: dist/windows/{tempest.exe, SDL3.dll, *.wav}
 ```
-Zip up `dist/windows/` for distribution. Targets Windows x86_64; runs on Windows 10 and later. SDL3.dll must stay alongside `tempest.exe`.
+The script bootstraps its own dependencies on first run (apt-installs `gcc-mingw-w64-x86-64` and downloads the prebuilt SDL3 MinGW dev package into `third_party/`). Zip up `dist/windows/` for distribution. Targets Windows x86_64; runs on Windows 10 and later. `SDL3.dll` must stay alongside `tempest.exe`.
 
 ### Web Version (Local Testing)
 ```bash
