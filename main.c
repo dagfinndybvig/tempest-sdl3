@@ -777,6 +777,14 @@ static void ContinueGameWithSelectedGeometry(AppContext* ctx) {
     ApplyTunnelShape(ctx, ctx->gameOverShape);
     for(int i=0; i<MAX_SHOTS; i++) ctx->shots[i].active = false;
     for(int i=0; i<MAX_ENEMIES; i++) ctx->enemies[i].active = false;
+
+    // Clear high-score entry state so a NEW high score in this continued
+    // game gets recognised. Without this, highscoreEntryPending leaks from
+    // the previous game and silently blocks AddHighScore's qualification.
+    ctx->highscoreEntryPending = false;
+    ctx->newHighScorePosition = -1;
+    ctx->nameEntryInitialized = false;
+    ctx->nameEntryCursorPos = 0;
 }
 
 static void LoadHighScores(AppContext* ctx) {
@@ -913,11 +921,10 @@ static void SaveHighScores(AppContext* ctx) {
 }
 
 static void AddHighScore(AppContext* ctx, int score) {
-    // Check if we have a pending highscore entry from before
-    if (ctx->highscoreEntryPending) {
-        ctx->state = STATE_HIGHSCORE_DISPLAY;
-        return;
-    }
+    // NOTE: previously this short-circuited when highscoreEntryPending was
+    // set, which silently dropped every high score after the first one in a
+    // session. The flag is only used by the R-key UI path to re-show the
+    // table; it must not gate score insertion.
 
     // Check if score qualifies for high score table
     for (int i = 0; i < MAX_HIGHSCORES; i++) {
